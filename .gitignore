@@ -1,0 +1,4 @@
+.pio/
+.vscode/
+# Real TLS material / secrets — commit the .example.h template instead.
+include/secrets/ca_cert.h
