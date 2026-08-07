@@ -45,8 +45,8 @@
 #define MODEM_BAUD            115200
 
 // I2C bus for the local (crawlspace) SHT40. Pick a free SDA/SCL pair.
-#define PIN_I2C_SDA           15
-#define PIN_I2C_SCL           16
+#define PIN_I2C_SDA           5
+#define PIN_I2C_SCL           4
 #define I2C_FREQ_HZ           100000
 
 // RS485 UART for the Modbus SHT40 sensors, via Waveshare TTL-to-RS485 module.
