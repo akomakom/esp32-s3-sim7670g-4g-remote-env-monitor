@@ -51,7 +51,7 @@
 
 // RS485 UART for the Modbus SHT40 sensors, via Waveshare TTL-to-RS485 module.
 #define RS485_UART_NUM        2
-#define PIN_RS485_TX          21
+#define PIN_RS485_TX          13
 #define PIN_RS485_RX          14
 // DE/RE direction-control pin. Set to -1 if your RS485 module is auto-direction
 // (many Waveshare modules are). Otherwise wire DE+RE together to this pin.
