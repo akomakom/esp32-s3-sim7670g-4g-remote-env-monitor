@@ -28,6 +28,16 @@
 // Leave false for deployed units. Can also be forced by holding BOOT at reset.
 #define PROVISIONING_MODE     false
 
+// Bench / offline mode. When 0, the modem is NEVER powered on and no cellular,
+// NTP or MQTT is attempted — the unit just samples its sensors and logs over USB
+// serial. Use this to validate the I2C SHT40 and RS485 bus before a SIM is
+// installed. (Not powering the modem also stops it presenting its own USB
+// network interface to your laptop.) Leave 1 to deploy. Can be overridden from
+// platformio.ini build_flags with -DCELLULAR_ENABLED=0.
+#ifndef CELLULAR_ENABLED
+  #define CELLULAR_ENABLED    1
+#endif
+
 // -----------------------------------------------------------------------------
 //  1.  GPIO / PINOUT  —  RESOLVE against the Waveshare wiki/schematic (spec §1)
 // -----------------------------------------------------------------------------
@@ -204,4 +214,4 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 //  10. LOGGING
 // -----------------------------------------------------------------------------
 #define LOG_BAUD              115200
-#define LOG_LEVEL             3        // 0=off 1=err 2=warn 3=info 4=debug
+#define LOG_LEVEL             4        // 0=off 1=err 2=warn 3=info 4=debug

@@ -58,12 +58,15 @@ void setup() {
   LOGI("=== Rental Monitor %s booting (%s) ===", FW_VERSION, DEVICE_ID);
 
   // Hardware watchdog: auto-reboot if the main loop ever hangs (spec §6).
+  // The Arduino core already inits the Task WDT at startup, so a plain
+  // esp_task_wdt_init() here returns ESP_ERR_INVALID_STATE and our (longer)
+  // timeout would be silently ignored — reconfigure in that case.
   esp_task_wdt_config_t wdt = {
     .timeout_ms = (uint32_t)WATCHDOG_TIMEOUT_S * 1000,
     .idle_core_mask = 0,
     .trigger_panic = true,
   };
-  esp_task_wdt_init(&wdt);
+  if (esp_task_wdt_init(&wdt) == ESP_ERR_INVALID_STATE) esp_task_wdt_reconfigure(&wdt);
   esp_task_wdt_add(NULL);
 
   ota::begin();                 // confirm-or-rollback a freshly flashed image
@@ -79,9 +82,14 @@ void setup() {
     while (true) { delay(1000); }
   }
 
+#if CELLULAR_ENABLED
   cellular::begin();
   timesync::begin();
   mqtt::begin(onOtaCommand);
+#else
+  LOGW("bench mode: CELLULAR_ENABLED=0 — modem/NTP/MQTT disabled, sensors only");
+  (void)onOtaCommand;
+#endif
 
   uint32_t now = millis();
   g_next_sample_ms = now;                                    // sample immediately
@@ -148,6 +156,9 @@ static void doHealth() {
 //  modem; on repeated failure it backs off to protect data + battery.
 // -----------------------------------------------------------------------------
 static bool serviceLink() {
+#if !CELLULAR_ENABLED
+  return false;                      // bench mode: never touch the modem
+#else
   cellular::loop();
 
   // Low-battery brownout guard (spec §6): sleep instead of crash-looping.
@@ -173,6 +184,7 @@ static bool serviceLink() {
     g_backoff_s = min<uint32_t>(g_backoff_s * 2, RECONNECT_BACKOFF_MAX_S);
   }
   return up;
+#endif
 }
 
 // -----------------------------------------------------------------------------

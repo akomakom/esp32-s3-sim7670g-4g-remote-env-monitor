@@ -46,7 +46,11 @@ static void formatEmpty() {
 }
 
 bool begin() {
-  if (!LittleFS.begin(true)) { LOGE("LittleFS mount failed"); return false; }
+  // The partition is NAMED "littlefs" (subtype spiffs); LittleFS.begin() defaults
+  // to looking for a partition labeled "spiffs", so the label must be passed.
+  if (!LittleFS.begin(true, "/littlefs", 10, "littlefs")) {
+    LOGE("LittleFS mount failed"); return false;
+  }
 
   File f = LittleFS.open(BUFFER_FILE_PATH, "r");
   bool valid = false;
