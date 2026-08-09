@@ -95,27 +95,60 @@
 #define MODBUS_ADDR_REGISTER  0x0101 // holding register storing the slave addr
 #define MODBUS_TIMEOUT_MS     500
 
+// ---- Hot tub water temperature over ESP-NOW ----
+//  The unit also subscribes to a separate ESP32 hot tub controller over ESP-NOW
+//  and records its water temperature as another "sensor" (see the BUS_ESPNOW row
+//  in SENSORS[] below). The controller's WiFi channel follows its home AP and is
+//  unknown, so the client channel-hops to find it (like the CYD display client).
+//  This is independent of the cellular uplink and fully failure-tolerant. Set to
+//  0 to compile the feature out entirely.
+#ifndef HOTTUB_ESPNOW_ENABLED
+  #define HOTTUB_ESPNOW_ENABLED   1
+#endif
+// Our board_id in the ESP-NOW pairing protocol. Must be > 0 and, if you also run
+// the CYD display client, distinct from it (the CYD uses 1) so both can pair.
+#define HOTTUB_BOARD_ID           2
+// Highest WiFi channel to probe: 11 in North America, 13 in Europe.
+#define HOTTUB_MAX_CHANNEL        11
+// How long to dwell on each channel waiting for a pairing reply before hopping.
+#define HOTTUB_CHANNEL_DWELL_MS   250
+// If no controller message arrives within this window, assume it moved/restarted
+// and restart the channel search.
+#define HOTTUB_MESSAGE_MAX_AGE_MS 60000UL
+// A water-temp reading older than this is considered stale and is NOT buffered
+// (so a dropped hot tub link looks like a skipped sample, not a frozen value).
+// Should comfortably exceed the sample interval below.
+#define HOTTUB_READING_MAX_AGE_MS 600000UL   // 10 min
+
 // ---- Sensor inventory ----
 //  index 0        = the local I2C SHT40.
 //  index 1..N     = RS485 Modbus sensors, in this declared order.
-//  `addr` is the Modbus slave address (ignored for the I2C sensor).
+//  index (ESPNOW) = the hot tub water temp received over ESP-NOW (§ HOT TUB).
+//  `addr` is the Modbus slave address (ignored for the I2C / ESP-NOW sensors).
 //  `enabled` can also be toggled at runtime via remote config (spec §4).
 //  RESOLVE: fill the real addresses after running the provisioning tool (§2).
+enum SensorBus {
+  BUS_I2C,     // local I2C SHT40 (temp + humidity)
+  BUS_RS485,   // RS485 Modbus SHT40-class transmitter (temp + humidity)
+  BUS_ESPNOW,  // hot tub controller over ESP-NOW (temp only, water temperature)
+};
+
 struct SensorDef {
   const char* key;      // short id used in the compact payload (keep it short!)
   const char* location; // human-readable, for docs/HA only
-  bool        is_i2c;   // true = local I2C SHT40, false = RS485 Modbus
-  uint8_t     addr;     // Modbus slave address (1..247); 0 for the I2C sensor
+  SensorBus   bus;      // which bus/transport this sensor lives on
+  uint8_t     addr;     // Modbus slave address (1..247); 0 for I2C / ESP-NOW
   bool        enabled;
 };
 
 static const SensorDef SENSORS[] = {
-  //  key       location                         i2c    addr  enabled
-  {  "crawl",  "Crawlspace (local I2C)",         true,   0,    true  },
-  {  "return", "Return / indoor air",            false,  0x01, true  },
-  {  "supply", "Supply duct",                    false,  0x02, true  },
-  {  "outdoor","Outdoor reference",              false,  0x03, true  },
-  {  "garage", "Attached garage (dehumidified)", false,  0x04, true  },
+  //  key       location                         bus         addr  enabled
+  {  "crawl",  "Crawlspace (local I2C)",         BUS_I2C,    0,    true  },
+  {  "return", "Return / indoor air",            BUS_RS485,  0x01, true  },
+  {  "supply", "Supply duct",                    BUS_RS485,  0x02, true  },
+  {  "outdoor","Outdoor reference",              BUS_RS485,  0x03, true  },
+  {  "garage", "Attached garage (dehumidified)", BUS_RS485,  0x04, true  },
+  {  "tub",    "Hot tub water (ESP-NOW)",        BUS_ESPNOW, 0,    HOTTUB_ESPNOW_ENABLED },
 };
 static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 
@@ -198,7 +231,7 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #define OTA_ENABLED           true
 // Only URLs on this HTTPS host prefix are accepted (defends the data budget and
 // blocks arbitrary-URL abuse of the cmd topic).  RESOLVE: your update host.
-#define OTA_ALLOWED_PREFIX    "https://ota.example.com/"
+#define OTA_ALLOWED_PREFIX    "https://broker.example.com/"
 #define OTA_HEALTHCHECK_S     60      // must stay healthy this long or rollback
 
 // -----------------------------------------------------------------------------

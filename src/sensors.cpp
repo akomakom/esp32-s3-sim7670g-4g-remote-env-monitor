@@ -2,6 +2,7 @@
 #include "psychrometrics.h"
 #include "config.h"
 #include "log.h"
+#include "espnow_tub.h"
 #include <Wire.h>
 #include <Adafruit_SHT4x.h>
 #include <ModbusMaster.h>
@@ -89,9 +90,33 @@ static Reading readModbus(uint8_t idx, uint8_t addr) {
   return finalize(r, true);
 }
 
+// The hot tub water temp arrives asynchronously over ESP-NOW and is cached by
+// the espnow_tub module. A "read" just snapshots the latest fresh value; if the
+// link is down or the value is stale we return invalid, exactly like a failed
+// bus read, so nothing bogus is buffered. Water temp has no humidity, so the
+// humidity-derived metrics are left NaN and omitted from the payload.
+static Reading readEspNow(uint8_t idx) {
+  Reading r{}; r.sensor_idx = idx;
+  r.rh = r.dew_c = r.abs_hum = NAN;
+  float temp_c;
+  if (!espnow_tub::latestWaterTempC(temp_c, HOTTUB_READING_MAX_AGE_MS)) {
+    r.valid = false;
+    return r;
+  }
+  r.temp_c = temp_c;
+  r.valid  = true;
+  return r;
+}
+
 Reading read(uint8_t idx) {
   const SensorDef& s = SENSORS[idx];
-  Reading r = s.is_i2c ? readI2C(idx) : readModbus(idx, s.addr);
+  Reading r;
+  switch (s.bus) {
+    case BUS_I2C:    r = readI2C(idx);            break;
+    case BUS_ESPNOW: r = readEspNow(idx);         break;
+    case BUS_RS485:
+    default:         r = readModbus(idx, s.addr); break;
+  }
   if (r.valid)
     LOGD("%s: T=%.2f RH=%.2f dew=%.2f AH=%.2f", s.key, r.temp_c, r.rh, r.dew_c, r.abs_hum);
   return r;

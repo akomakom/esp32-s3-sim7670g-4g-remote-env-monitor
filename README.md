@@ -54,6 +54,31 @@ Set `PROVISIONING_MODE true` in `config.h` (or hold **BOOT** at reset), then:
 3. Verify, disconnect, repeat for each sensor.
 4. Record each final address in `SENSORS[]`, set `PROVISIONING_MODE false`, reflash.
 
+## Hot tub water temperature (ESP-NOW)
+
+Beyond the 5 wired sensors, the unit also subscribes to a separate ESP32 **hot
+tub controller** over **ESP-NOW** and records its **water temperature** as a 6th
+sensor (`tub`), flowing through the same buffer → batch → publish pipeline. The
+uplink is cellular (PPP), so the WiFi radio is free — ESP-NOW runs on it without
+disturbing anything else.
+
+The controller's WiFi channel follows its home AP and is unknown, so the client
+**channel-hops 11→1** sending pairing requests until the controller answers
+(same protocol as the CYD display client in the companion project). The whole
+search is a non-blocking, `millis()`-driven state machine and is fully
+failure-tolerant: every ESP-IDF call is checked (no panics), and if the link
+drops or a reading goes stale it is simply skipped — never buffered as a frozen
+value. Water temp arrives in °F and is converted to °C to match everything else.
+
+Configure it in the **HOT TUB** block of [`config.h`](include/config.h)
+(`HOTTUB_ESPNOW_ENABLED`, `HOTTUB_BOARD_ID`, `HOTTUB_MAX_CHANNEL`, staleness
+windows). The wire protocol lives in
+[`include/hot_tub_types.h`](include/hot_tub_types.h) — a **verbatim** copy of the
+controller's header (keep the two in sync). The client itself is
+[`src/espnow_tub.cpp`](src/espnow_tub.cpp). Disable at runtime like any sensor:
+`{"en":{"tub":false}}` on the retained config topic; or set
+`HOTTUB_ESPNOW_ENABLED 0` to compile it out.
+
 ## How it maps to the spec
 
 | Spec area | Implementation |

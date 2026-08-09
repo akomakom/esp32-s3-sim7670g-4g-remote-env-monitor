@@ -26,6 +26,7 @@
 #include "mqtt_transport.h"
 #include "health.h"
 #include "ota.h"
+#include "espnow_tub.h"
 
 // ---- scheduling state ----
 static uint32_t g_next_sample_ms = 0;
@@ -81,6 +82,10 @@ void setup() {
     LOGI("Provisioning done — reflash with PROVISIONING_MODE=false to deploy.");
     while (true) { delay(1000); }
   }
+
+  // Hot tub water temp over ESP-NOW (uses the WiFi radio only; independent of the
+  // cellular PPP uplink). Non-blocking; safe/no-op if the feature is disabled.
+  espnow_tub::begin();
 
 #if CELLULAR_ENABLED
   cellular::begin();
@@ -190,6 +195,8 @@ static bool serviceLink() {
 // -----------------------------------------------------------------------------
 void loop() {
   feedWatchdog();
+
+  espnow_tub::loop();                 // advance hot tub channel search / pairing
 
   bool linkUp = serviceLink();
   if (linkUp) mqtt::loop();          // service keepalive + inbound config/cmd

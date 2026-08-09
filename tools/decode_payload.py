@@ -11,7 +11,8 @@ Only dependency: `msgpack` (pip install msgpack).
 import sys, json, msgpack
 
 # Sensor index -> location. Keep in sync with config.h SENSORS[].
-LOCATIONS = ["crawl", "return", "supply", "outdoor", "garage"]
+# "tub" is the hot tub water temp over ESP-NOW (temp-only: no h/p/a keys).
+LOCATIONS = ["crawl", "return", "supply", "outdoor", "garage", "tub"]
 FIELDS = {"c": "temp_c", "h": "rh", "p": "dew_c", "a": "abs_hum", "t": "ts", "i": "sensor"}
 
 

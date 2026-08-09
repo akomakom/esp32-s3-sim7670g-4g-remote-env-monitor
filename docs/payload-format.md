@@ -26,9 +26,14 @@ Logical shape (shown as JSON for readability; on the wire it is MessagePack):
 | `i` | sensor index into `SENSORS[]` (config.h)  |
 | `t` | capture time, **UTC epoch seconds** (backdated — this is the true sample time, not send time) |
 | `c` | temperature °C                            |
-| `h` | relative humidity %                       |
-| `p` | dew point °C (derived)                    |
-| `a` | absolute humidity g/m³ (derived)          |
+| `h` | relative humidity % *(omitted for temp-only sensors)* |
+| `p` | dew point °C (derived) *(omitted for temp-only sensors)* |
+| `a` | absolute humidity g/m³ (derived) *(omitted for temp-only sensors)* |
+
+**Temp-only sensors:** some sources report temperature but no humidity — e.g. the
+hot tub water temperature received over ESP-NOW (`BUS_ESPNOW` in `SENSORS[]`).
+For those, `c` is present and `h`/`p`/`a` are omitted entirely (not sent as `0`),
+so the decoder must treat those keys as optional.
 
 Readings are **backdated**: `t` is stamped when the sample was taken and buffered
 to flash, so Home Assistant records the true capture time even after a multi-day
