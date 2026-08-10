@@ -99,6 +99,15 @@
 // -----------------------------------------------------------------------------
 #define SHT40_I2C_ADDRESS     0x44   // fixed on the SHT40 (spec §2)
 
+// ---- Derived metrics ----
+//  Dew point and absolute humidity are DERIVED on-device from temperature +
+//  humidity. They add bytes to every reading on the metered uplink and can be
+//  recomputed server-side (Home Assistant templates, etc.), so they default OFF.
+//  Set to 1 to compute and transmit them. (Raw temp `c` and humidity `h` are
+//  always sent; these only control the derived `p`/`a` fields — see payload.cpp.)
+#define SEND_DEW_POINT        0   // dew point °C          (~7 B/reading)
+#define SEND_ABS_HUMIDITY     0   // absolute humidity g/m³ (~7 B/reading)
+
 // ---- RS485 Modbus SHT40 register map ----  RESOLVE for your exact units.
 //  Defaults below are for XY-MD02 / SHT20-Modbus-class transmitters, which the
 //  spec names as the likely part. VERIFY against your sensor's datasheet.
@@ -124,7 +133,7 @@
 #endif
 // Our board_id in the ESP-NOW pairing protocol. Must be > 0 and, if you also run
 // the CYD display client, distinct from it (the CYD uses 1) so both can pair.
-#define HOTTUB_BOARD_ID           2
+#define HOTTUB_BOARD_ID           20
 // Highest WiFi channel to probe: 11 in North America, 13 in Europe.
 #define HOTTUB_MAX_CHANNEL        11
 // How long to dwell on each channel waiting for a pairing reply before hopping.
@@ -233,8 +242,8 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 // -----------------------------------------------------------------------------
 //  These are DEFAULTS. The retained config topic can override them live without
 //  reflashing (see remote_config). Keep the send interval large to save data.
-#define DEFAULT_SAMPLE_INTERVAL_S   60    // read all sensors every 5 min
-#define DEFAULT_REPORT_INTERVAL_S   60   // publish a batch every 30 min
+#define DEFAULT_SAMPLE_INTERVAL_S   300    // read all sensors every 5 min
+#define DEFAULT_REPORT_INTERVAL_S   300   // publish a batch every 30 min
 #define MAX_BATCH_READINGS          40     // cap per publish (fits MQTT_BUFFER)
 #define MQTT_BUFFER_BYTES           2048   // must exceed a full MessagePack batch
 // Cap batches drained per report cycle so a big backlog (post-outage) can't hog

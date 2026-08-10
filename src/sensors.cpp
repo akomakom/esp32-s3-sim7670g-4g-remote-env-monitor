@@ -46,8 +46,10 @@ void begin() {
 static Reading finalize(Reading r, bool ok) {
   r.valid = ok;
   if (ok) {
-    r.dew_c   = dewPointC(r.temp_c, r.rh);
-    r.abs_hum = absoluteHumidity(r.temp_c, r.rh);
+    // Derived metrics are optional (config.h) — leave NaN when disabled so the
+    // payload encoder omits them and no bandwidth is spent.
+    r.dew_c   = SEND_DEW_POINT    ? dewPointC(r.temp_c, r.rh)        : NAN;
+    r.abs_hum = SEND_ABS_HUMIDITY ? absoluteHumidity(r.temp_c, r.rh) : NAN;
   }
   return r;
 }
