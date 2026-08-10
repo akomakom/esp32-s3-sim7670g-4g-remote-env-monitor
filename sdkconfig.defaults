@@ -35,6 +35,14 @@ CONFIG_LWIP_PPP_CHAP_SUPPORT=y
 
 # --- USB host: the 4G module may sit behind the board's internal USB hub ---
 CONFIG_USB_HOST_HUBS_SUPPORTED=y
+# The SIM7670G is a 10-interface composite; its config descriptor exceeds the
+# default 256-byte control-transfer buffer (ENUM: CHECK_SHORT_CONFIG_DESC FAILED).
+CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=1024
+
+# --- C++ exceptions: esp_modem THROWS on errors (e.g. USB open failure). With
+# exceptions disabled the throw becomes abort() -> boot loop. Enabling them lets
+# esp_modem_new_dev_usb return NULL on failure so our retry logic stays alive. ---
+CONFIG_COMPILER_CXX_EXCEPTIONS=y
 
 # --- mbedTLS options Arduino's NetworkClientSecure/ssl_client.cpp requires ---
 # Without PSK modes, ssl_client.cpp compiles its whole implementation out (guarded

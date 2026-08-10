@@ -130,7 +130,12 @@ static void doReport() {
   static Reading batch[MAX_BATCH_READINGS];
   static uint8_t buf[MQTT_BUFFER_BYTES];
 
-  while (ringbuf::count() > 0) {
+  // Drain at most MAX_REPORT_BATCHES_PER_CYCLE per call. A large backlog (e.g.
+  // after an outage) would otherwise publish dozens of TLS batches back-to-back,
+  // blocking the loop past the watchdog timeout -> reset -> backlog never clears.
+  // Feed the WDT and service the MQTT keepalive between batches; the remainder
+  // drains on the next report cycle.
+  for (uint16_t b = 0; b < MAX_REPORT_BATCHES_PER_CYCLE && ringbuf::count() > 0; b++) {
     size_t n = 0;
     size_t avail = ringbuf::count();
     for (size_t i = 0; i < avail && n < MAX_BATCH_READINGS; i++)
@@ -146,6 +151,8 @@ static void doReport() {
     ringbuf::popFront(n);             // confirmed sent -> safe to drop
     LOGI("reported %u readings (%u B), %u left", (unsigned)n, (unsigned)len,
          (unsigned)ringbuf::count());
+    feedWatchdog();                   // long drains must not starve the task WDT
+    mqtt::loop();                     // keep the MQTT session serviced meanwhile
   }
 }
 

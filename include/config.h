@@ -16,6 +16,17 @@
 #pragma once
 
 // -----------------------------------------------------------------------------
+//  Local secret overrides (git-ignored). Copy secrets/secrets.example.h to
+//  secrets/secrets.h and put per-unit secrets there (MQTT_PASSWORD, and
+//  optionally MQTT_USERNAME / DEVICE_ID / CELL_APN). Because this is included
+//  BEFORE the #ifndef defaults below, whatever it defines wins — and it never
+//  gets committed. (build_flags -D... still works too, for CI.)
+// -----------------------------------------------------------------------------
+#if __has_include("secrets/secrets.h")
+  #include "secrets/secrets.h"
+#endif
+
+// -----------------------------------------------------------------------------
 //  0.  BUILD / IDENTITY
 // -----------------------------------------------------------------------------
 #define FW_VERSION            "1.0.0"          // reported in health telemetry
@@ -222,10 +233,14 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 // -----------------------------------------------------------------------------
 //  These are DEFAULTS. The retained config topic can override them live without
 //  reflashing (see remote_config). Keep the send interval large to save data.
-#define DEFAULT_SAMPLE_INTERVAL_S   300    // read all sensors every 5 min
-#define DEFAULT_REPORT_INTERVAL_S   1800   // publish a batch every 30 min
+#define DEFAULT_SAMPLE_INTERVAL_S   60    // read all sensors every 5 min
+#define DEFAULT_REPORT_INTERVAL_S   60   // publish a batch every 30 min
 #define MAX_BATCH_READINGS          40     // cap per publish (fits MQTT_BUFFER)
 #define MQTT_BUFFER_BYTES           2048   // must exceed a full MessagePack batch
+// Cap batches drained per report cycle so a big backlog (post-outage) can't hog
+// the loop long enough to trip the watchdog. 50*40 = 2000 readings/cycle; the
+// rest drains on the next cycle. (The drain also feeds the WDT between batches.)
+#define MAX_REPORT_BATCHES_PER_CYCLE 50
 
 // -----------------------------------------------------------------------------
 //  6.  FLASH RING BUFFER  (spec §6 — survive multi-day outages)
