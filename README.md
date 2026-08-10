@@ -93,7 +93,9 @@ controller's header (keep the two in sync). The client itself is
 
 Wire formats and the retained-config / OTA-command JSON are documented in
 [`docs/payload-format.md`](docs/payload-format.md). A server-side decoder is in
-[`tools/decode_payload.py`](tools/decode_payload.py).
+[`tools/decode_payload.py`](tools/decode_payload.py). The full **OTA update
+walkthrough** (build → host over HTTPS → trigger via MQTT → verify/rollback) is
+in [`docs/ota.md`](docs/ota.md).
 
 ## Data flow
 

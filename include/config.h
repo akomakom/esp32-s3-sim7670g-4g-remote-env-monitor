@@ -278,6 +278,19 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
   #define OTA_ALLOWED_PREFIX  "https://ota.example.com/"
 #endif
 #define OTA_HEALTHCHECK_S     60      // must stay healthy this long or rollback
+// OTA TLS trust: 1 = validate the download host against the built-in Mozilla
+// root bundle (public CAs, incl. Let's Encrypt) so you can serve firmware from
+// an ordinary HTTPS site; 0 = pin your private CA (MQTT_CA_CERT) instead. Note
+// this is INDEPENDENT of MQTT, which always uses the private CA.
+#define OTA_USE_CERT_BUNDLE   1
+// Stall timeout for the OTA download: abort only if NO data arrives for this many
+// seconds. Cat-1 cellular is slow/jittery, so keep this generous — the transfer
+// as a whole can take a while; we only give up on a true stall.
+#define OTA_DOWNLOAD_TIMEOUT_S 30
+// On a stall or dropped connection, reconnect and resume the download from where
+// it left off (HTTP Range request) up to this many times before giving up. Lets
+// a flaky cellular link finish the pull without re-fetching what already landed.
+#define OTA_MAX_RESUMES        20
 
 // -----------------------------------------------------------------------------
 //  9.  SERVER-SIDE (informational only — enforced on the server, not here)
