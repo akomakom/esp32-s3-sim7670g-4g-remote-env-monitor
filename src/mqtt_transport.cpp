@@ -31,6 +31,15 @@ static void onMessage(char* topic, uint8_t* payload, unsigned int len) {
     rconfig::applyJson((const char*)payload, len);
     return;
   }
+  // Per-key config (HA number controls): payload is a plain integer of seconds.
+  if (strcmp(topic, TOPIC_CFG_SAMPLE) == 0) {
+    rconfig::setSampleIntervalS(strtoul(String((char*)payload, len).c_str(), nullptr, 10));
+    return;
+  }
+  if (strcmp(topic, TOPIC_CFG_REPORT) == 0) {
+    rconfig::setReportIntervalS(strtoul(String((char*)payload, len).c_str(), nullptr, 10));
+    return;
+  }
   if (strcmp(topic, TOPIC_CMD) == 0) {
     // Minimal command channel. OTA is explicit and host-gated (spec §4.5/§8).
     // Format: {"cmd":"ota","url":"https://ota.example.com/fw.bin"}
@@ -82,8 +91,10 @@ bool ensureConnected() {
                            /*cleanSession*/ MQTT_CLEAN_SESSION);
   if (!ok) { LOGW("mqtt: connect failed rc=%d", client.state()); return false; }
 
-  client.subscribe(TOPIC_CONFIG, MQTT_QOS);  // retained -> we get current config
-  client.subscribe(TOPIC_CMD,    MQTT_QOS);
+  client.subscribe(TOPIC_CONFIG,     MQTT_QOS);  // retained -> we get current config
+  client.subscribe(TOPIC_CMD,        MQTT_QOS);
+  client.subscribe(TOPIC_CFG_SAMPLE, MQTT_QOS);  // retained per-key config (HA numbers)
+  client.subscribe(TOPIC_CFG_REPORT, MQTT_QOS);
   LOGI("mqtt: connected, subscribed to config+cmd");
   return true;
 }

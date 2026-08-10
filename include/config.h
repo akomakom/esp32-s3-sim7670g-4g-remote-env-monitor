@@ -29,7 +29,7 @@
 // -----------------------------------------------------------------------------
 //  0.  BUILD / IDENTITY
 // -----------------------------------------------------------------------------
-#define FW_VERSION            "1.0.0"          // reported in health telemetry
+#define FW_VERSION            "1.0.1"          // reported in health telemetry
 #ifndef DEVICE_ID
   #define DEVICE_ID           "rental-mon-01"  // unique per unit; used in topics
 #endif
@@ -226,9 +226,14 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #define TOPIC_BASE            "rental/" DEVICE_ID
 #define TOPIC_DATA            TOPIC_BASE "/data"
 #define TOPIC_HEALTH          TOPIC_BASE "/health"
-#define TOPIC_CONFIG          TOPIC_BASE "/config"   // retained, device subs
+#define TOPIC_CONFIG          TOPIC_BASE "/config"   // retained, device subs (bulk JSON)
 #define TOPIC_CMD             TOPIC_BASE "/cmd"       // device subs
 #define TOPIC_ACK             TOPIC_BASE "/ack"       // device publishes
+// Per-key retained config topics for simple HA `number` controls. Separate
+// topics so two settings never overwrite each other's retained value (matters
+// when the device is offline and a change is applied on reconnect).
+#define TOPIC_CFG_SAMPLE      TOPIC_BASE "/config/sample_s"  // retained, device subs
+#define TOPIC_CFG_REPORT      TOPIC_BASE "/config/report_s"  // retained, device subs
 
 // TLS: paste the broker's CA chain (PEM) into secrets/ca_cert.h as
 // `MQTT_CA_CERT`. If you skip it and set MQTT_TLS_INSECURE the device will NOT

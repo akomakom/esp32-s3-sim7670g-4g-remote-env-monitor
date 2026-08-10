@@ -349,3 +349,45 @@ mqtt:
       payload_off: "OFF"
       device_class: power
       entity_category: diagnostic
+  number:
+    # Soft-configurable intervals. Setting a value publishes it (retained) to the
+    # per-key config topic; the device clamps (10..86400 s), applies live, and
+    # persists to NVS. Current active value is read back from the health topic.
+    - name: "Rental Monitor Sample Interval"
+      unique_id: rentalmon_sample_s
+      command_topic: "rental/rental-mon-01/config/sample_s"
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.sample_s }}"
+      retain: true
+      optimistic: true
+      min: 10
+      max: 86400
+      step: 10
+      unit_of_measurement: "s"
+      mode: box
+      icon: mdi:timer-outline
+      entity_category: config
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    - name: "Rental Monitor Report Interval"
+      unique_id: rentalmon_report_s
+      command_topic: "rental/rental-mon-01/config/report_s"
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.report_s }}"
+      retain: true
+      optimistic: true
+      min: 10
+      max: 86400
+      step: 10
+      unit_of_measurement: "s"
+      mode: box
+      icon: mdi:timer-upload-outline
+      entity_category: config
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"

@@ -1,0 +1,625 @@
+  sensor:
+    # ----------------------------------------------------------------
+    # ENVIRONMENTAL METRICS
+    # ----------------------------------------------------------------
+    - name: "Crawlspace Temperature"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      suggested_display_precision: 1
+      unit_of_measurement: "°F"
+      device_class: "temperature"
+      state_class: "measurement"
+      value_template: >-
+        {% if value_json.payload is defined and value_json.payload.temperature is defined %}
+          {{ value_json.payload.temperature | float * 1.8 + 32 }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_sht40_temp"
+      device: &meshtastic_device
+        identifiers: "meshtastic_45a45c34"
+        name: "Crawlspace Node"
+        model: "Heltec T114"
+        manufacturer: "Sensirion SHT40"
+
+    - name: "Crawlspace Humidity"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      suggested_display_precision: 1
+      unit_of_measurement: "%"
+      device_class: "humidity"
+      state_class: "measurement"
+      value_template: >-
+        {% if value_json.payload is defined and value_json.payload.relative_humidity is defined %}
+          {{ value_json.payload.relative_humidity | float }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_sht40_humidity"
+      device: *meshtastic_device
+
+    # ----------------------------------------------------------------
+    # DIAGNOSTICS & SYSTEM METRICS
+    # ----------------------------------------------------------------
+    - name: "Crawlspace Node Uptime"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      unit_of_measurement: "s"
+      device_class: "duration"
+      entity_category: "diagnostic"
+      value_template: >-
+        {% if value_json.payload is defined and value_json.payload.uptime_seconds is defined %}
+          {{ value_json.payload.uptime_seconds | int }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_node_uptime"
+      device: *meshtastic_device
+
+    - name: "Crawlspace Node Battery"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      unit_of_measurement: "%"
+      device_class: "battery"
+      state_class: "measurement"
+      entity_category: "diagnostic"
+      value_template: >-
+        {% if value_json.payload is defined and value_json.payload.battery_level is defined %}
+          {{ value_json.payload.battery_level | int }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_node_battery"
+      device: *meshtastic_device
+
+    # ----------------------------------------------------------------
+    # POSITION METRICS
+    # ----------------------------------------------------------------
+    - name: "Crawlspace Node Latitude"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      value_template: >-
+        {% if value_json.type == 'position' and value_json.payload.latitude_i is defined %}
+          {{ value_json.payload.latitude_i / 10000000 }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_node_lat"
+      device: *meshtastic_device
+
+    - name: "Crawlspace Node Longitude"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      value_template: >-
+        {% if value_json.type == 'position' and value_json.payload.longitude_i is defined %}
+          {{ value_json.payload.longitude_i / 10000000 }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_node_lon"
+      device: *meshtastic_device
+    # ----------------------------------------------------------------
+    # LORA SIGNAL METRICS
+    # ----------------------------------------------------------------
+    - name: "Crawlspace Node SNR"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      unit_of_measurement: "dB"
+      state_class: "measurement"
+      entity_category: "diagnostic"
+      value_template: >-
+        {% if value_json.snr is defined %}
+          {{ value_json.snr | float }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_node_snr"
+      device: *meshtastic_device
+
+    - name: "Crawlspace Node RSSI"
+      state_topic: "msh/Home/2/json/riverlight/!45a45c34"
+      unit_of_measurement: "dBm"
+      device_class: "signal_strength"
+      state_class: "measurement"
+      entity_category: "diagnostic"
+      value_template: >-
+        {% if value_json.rssi is defined %}
+          {{ value_json.rssi | int }}
+        {% else %}
+          {{ this.state }}
+        {% endif %}
+      unique_id: "crawlspace_node_rssi"
+      device: *meshtastic_device
+
+    # RENTAL MONITOR BELOW
+
+    # ---- crawl ----
+    - name: "Rental Crawlspace Temperature"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_crawl_c
+      state_topic: "rental/rental-mon-01/sensor/crawl"
+      value_template: "{{ value_json.c | default(None) }}"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    - name: "Rental Crawlspace Humidity"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_crawl_h
+      state_topic: "rental/rental-mon-01/sensor/crawl"
+      value_template: "{{ value_json.h | default(None) }}"
+      unit_of_measurement: "%"
+      device_class: humidity
+      state_class: measurement
+      suggested_display_precision: 1
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+  #  - name: "Rental Crawlspace Dew Point"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_crawl_p
+  #    state_topic: "rental/rental-mon-01/sensor/crawl"
+  #    value_template: "{{ value_json.p | default(None) }}"
+  #    unit_of_measurement: "°C"
+  #    device_class: temperature
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+  #  - name: "Rental Crawlspace Absolute Humidity"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_crawl_a
+  #    state_topic: "rental/rental-mon-01/sensor/crawl"
+  #    value_template: "{{ value_json.a | default(None) }}"
+  #    unit_of_measurement: "g/m³"
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+    # ---- return ----
+    - name: "Rental Return Air Temperature"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_return_c
+      state_topic: "rental/rental-mon-01/sensor/return"
+      value_template: "{{ value_json.c | default(None) }}"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    - name: "Rental Return Air Humidity"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_return_h
+      state_topic: "rental/rental-mon-01/sensor/return"
+      value_template: "{{ value_json.h | default(None) }}"
+      unit_of_measurement: "%"
+      device_class: humidity
+      state_class: measurement
+      suggested_display_precision: 1
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+  #  - name: "Rental Return Air Dew Point"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_return_p
+  #    state_topic: "rental/rental-mon-01/sensor/return"
+  #    value_template: "{{ value_json.p | default(None) }}"
+  #    unit_of_measurement: "°C"
+  #    device_class: temperature
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+  #  - name: "Rental Return Air Absolute Humidity"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_return_a
+  #    state_topic: "rental/rental-mon-01/sensor/return"
+  #    value_template: "{{ value_json.a | default(None) }}"
+  #    unit_of_measurement: "g/m³"
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+    # ---- supply ----
+    - name: "Rental Supply Duct Temperature"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_supply_c
+      state_topic: "rental/rental-mon-01/sensor/supply"
+      value_template: "{{ value_json.c | default(None) }}"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    - name: "Rental Supply Duct Humidity"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_supply_h
+      state_topic: "rental/rental-mon-01/sensor/supply"
+      value_template: "{{ value_json.h | default(None) }}"
+      unit_of_measurement: "%"
+      device_class: humidity
+      state_class: measurement
+      suggested_display_precision: 1
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+  #  - name: "Rental Supply Duct Dew Point"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_supply_p
+  #    state_topic: "rental/rental-mon-01/sensor/supply"
+  #    value_template: "{{ value_json.p | default(None) }}"
+  #    unit_of_measurement: "°C"
+  #    device_class: temperature
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+  #  - name: "Rental Supply Duct Absolute Humidity"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_supply_a
+  #    state_topic: "rental/rental-mon-01/sensor/supply"
+  #    value_template: "{{ value_json.a | default(None) }}"
+  #    unit_of_measurement: "g/m³"
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+    # ---- outdoor ----
+    - name: "Rental Outdoor Temperature"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_outdoor_c
+      state_topic: "rental/rental-mon-01/sensor/outdoor"
+      value_template: "{{ value_json.c | default(None) }}"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    - name: "Rental Outdoor Humidity"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_outdoor_h
+      state_topic: "rental/rental-mon-01/sensor/outdoor"
+      value_template: "{{ value_json.h | default(None) }}"
+      unit_of_measurement: "%"
+      device_class: humidity
+      state_class: measurement
+      suggested_display_precision: 1
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+  #  - name: "Rental Outdoor Dew Point"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_outdoor_p
+  #    state_topic: "rental/rental-mon-01/sensor/outdoor"
+  #    value_template: "{{ value_json.p | default(None) }}"
+  #    unit_of_measurement: "°C"
+  #    device_class: temperature
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+  #  - name: "Rental Outdoor Absolute Humidity"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_outdoor_a
+  #    state_topic: "rental/rental-mon-01/sensor/outdoor"
+  #    value_template: "{{ value_json.a | default(None) }}"
+  #    unit_of_measurement: "g/m³"
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+    # ---- garage ----
+    - name: "Rental Garage Temperature"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_garage_c
+      state_topic: "rental/rental-mon-01/sensor/garage"
+      value_template: "{{ value_json.c | default(None) }}"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    - name: "Rental Garage Humidity"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_garage_h
+      state_topic: "rental/rental-mon-01/sensor/garage"
+      value_template: "{{ value_json.h | default(None) }}"
+      unit_of_measurement: "%"
+      device_class: humidity
+      state_class: measurement
+      suggested_display_precision: 1
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+  #  - name: "Rental Garage Dew Point"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_garage_p
+  #    state_topic: "rental/rental-mon-01/sensor/garage"
+  #    value_template: "{{ value_json.p | default(None) }}"
+  #    unit_of_measurement: "°C"
+  #    device_class: temperature
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+  #  - name: "Rental Garage Absolute Humidity"
+  #    suggested_area: "Rental"
+  #    unique_id: rentalmon_garage_a
+  #    state_topic: "rental/rental-mon-01/sensor/garage"
+  #    value_template: "{{ value_json.a | default(None) }}"
+  #    unit_of_measurement: "g/m³"
+  #    state_class: measurement
+  #    availability:
+  #      - topic: "rental/rental-mon-01/health"
+  #        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+  #        payload_available: "online"
+  #        payload_not_available: "offline"
+    # ---- tub ----
+    - name: "Rental Hot Tub Water Temperature"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_tub_c
+      state_topic: "rental/rental-mon-01/sensor/tub"
+      value_template: "{{ value_json.c | default(None) }}"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    # ---- health / diagnostics ----
+    - name: "Rental Monitor Signal RSRP"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_rssi
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: "dBm"
+      device_class: signal_strength
+      state_class: measurement
+      entity_category: diagnostic
+    - name: "Rental Monitor Free Heap"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_heap
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.heap }}"
+      unit_of_measurement: "B"
+      state_class: measurement
+      entity_category: diagnostic
+    - name: "Rental Monitor Uptime"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_uptime
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.up }}"
+      unit_of_measurement: "s"
+      device_class: duration
+      state_class: measurement
+      entity_category: diagnostic
+    - name: "Rental Monitor Battery Voltage"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_vbat
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.vbat }}"
+      unit_of_measurement: "V"
+      device_class: voltage
+      state_class: measurement
+      entity_category: diagnostic
+    - name: "Rental Monitor Buffered Records"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_buffered
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.buf }}"
+      state_class: measurement
+      entity_category: diagnostic
+    - name: "Rental Monitor Bytes Sent Today"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_tx
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.tx }}"
+      unit_of_measurement: "B"
+      device_class: data_size
+      state_class: total_increasing
+      entity_category: diagnostic
+    - name: "Rental Monitor Bytes Received Today"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_rx
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.rx }}"
+      unit_of_measurement: "B"
+      device_class: data_size
+      state_class: total_increasing
+      entity_category: diagnostic
+    - name: "Rental Monitor Operator"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_operator
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.op }}"
+      entity_category: diagnostic
+    - name: "Rental Monitor Firmware"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_fw
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.fw }}"
+      entity_category: diagnostic
+    - name: "Rental Monitor Reset Reason"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_reset
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.rst }}"
+      entity_category: diagnostic
+  binary_sensor:
+    - name: "Rental Monitor Online"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_online
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ 'ON' if value_json.online else 'OFF' }}"
+      payload_on: "ON"
+      payload_off: "OFF"
+      device_class: connectivity
+      entity_category: diagnostic
+    - name: "Rental Monitor Mains Power"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_mains
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ 'ON' if value_json.mains else 'OFF' }}"
+      payload_on: "ON"
+      payload_off: "OFF"
+      device_class: power
+      entity_category: diagnostic
+  number:
+    # Soft-configurable intervals. Setting a value publishes it (retained) to the
+    # per-key config topic; the device clamps (10..86400 s), applies live, and
+    # persists to NVS. Current active value is read back from the health topic.
+    - name: "Rental Monitor Sample Interval"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_sample_s
+      command_topic: "rental/rental-mon-01/config/sample_s"
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.sample_s }}"
+      retain: true
+      optimistic: true
+      min: 10
+      max: 86400
+      step: 10
+      unit_of_measurement: "s"
+      mode: box
+      icon: mdi:timer-outline
+      entity_category: config
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+    - name: "Rental Monitor Report Interval"
+      device:
+        suggested_area: "Rental"
+        name: "Rental Monitor"
+        identifiers: "rental_mon_01"
+      unique_id: rentalmon_report_s
+      command_topic: "rental/rental-mon-01/config/report_s"
+      state_topic: "rental/rental-mon-01/health"
+      value_template: "{{ value_json.report_s }}"
+      retain: true
+      optimistic: true
+      min: 10
+      max: 86400
+      step: 10
+      unit_of_measurement: "s"
+      mode: box
+      icon: mdi:timer-upload-outline
+      entity_category: config
+      availability:
+        - topic: "rental/rental-mon-01/health"
+          value_template: "{{ 'online' if value_json.online else 'offline' }}"
+          payload_available: "online"
+          payload_not_available: "offline"
+

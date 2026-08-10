@@ -4,6 +4,7 @@
 #include "mqtt_transport.h"
 #include "timesync.h"
 #include "ring_buffer.h"
+#include "runtime_config.h"
 #include <esp_system.h>
 
 namespace health {
@@ -43,7 +44,8 @@ size_t buildJson(char* out, size_t cap) {
   return snprintf(out, cap,
     "{\"online\":true,\"fw\":\"%s\",\"ts\":%u,\"up\":%u,"
     "\"heap\":%u,\"rssi\":%d,\"op\":\"%s\",\"vbat\":%.2f,"
-    "\"mains\":%s,\"rst\":\"%s\",\"buf\":%u,\"tx\":%u,\"rx\":%u}",
+    "\"mains\":%s,\"rst\":\"%s\",\"buf\":%u,\"tx\":%u,\"rx\":%u,"
+    "\"sample_s\":%u,\"report_s\":%u}",
     FW_VERSION,
     timesync::nowUtc(),
     (uint32_t)(millis() / 1000),
@@ -55,7 +57,9 @@ size_t buildJson(char* out, size_t cap) {
     resetReason(),
     (uint32_t)ringbuf::count(),
     mqtt::bytesSentToday(),
-    mqtt::bytesRecvToday());
+    mqtt::bytesRecvToday(),
+    rconfig::get().sample_interval_s,
+    rconfig::get().report_interval_s);
 }
 
 } // namespace health

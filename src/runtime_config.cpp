@@ -49,6 +49,24 @@ static uint32_t clampInterval(uint32_t v) {
   return v;
 }
 
+bool setSampleIntervalS(uint32_t v) {
+  v = clampInterval(v);
+  if (v == s.sample_interval_s) return false;
+  s.sample_interval_s = v;
+  persist();
+  LOGI("config: sample=%us (set)", v);
+  return true;
+}
+
+bool setReportIntervalS(uint32_t v) {
+  v = clampInterval(v);
+  if (v == s.report_interval_s) return false;
+  s.report_interval_s = v;
+  persist();
+  LOGI("config: report=%us (set)", v);
+  return true;
+}
+
 bool applyJson(const char* json, size_t len) {
   JsonDocument doc;
   if (deserializeJson(doc, json, len)) { LOGW("config: bad JSON ignored"); return false; }

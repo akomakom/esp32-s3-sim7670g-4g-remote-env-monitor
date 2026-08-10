@@ -21,4 +21,9 @@ const Settings& get();
 // anything changed. Example: {"sample_s":300,"report_s":1800,"en":{"garage":false}}
 bool applyJson(const char* json, size_t len);
 
+// Set one interval (seconds), clamped + persisted. Returns true if it changed.
+// Used by the per-key MQTT config topics (HA number controls).
+bool setSampleIntervalS(uint32_t s);
+bool setReportIntervalS(uint32_t s);
+
 } // namespace rconfig

@@ -43,16 +43,24 @@ outage flush.
 
 Small JSON (sent rarely, size isn't critical). Fields: `fw`, `ts`, `up` (uptime
 s), `heap`, `rssi` (dBm), `op` (operator), `vbat`, `mains`, `rst` (reset cause),
-`buf` (buffered records), `tx`/`rx` (bytes today). See spec §8.
+`buf` (buffered records), `tx`/`rx` (bytes today), and the **active** intervals
+`sample_s`/`report_s` (so a dashboard/control can reflect the live config). See
+spec §8.
 
-## Config topic — `rental/<device>/config` (retained, device subscribes)
+## Config topics — `rental/<device>/config…` (retained, device subscribes)
 
-Publish a small **JSON** doc *retained* so the device pulls it only on change
-(spec §5). Unknown fields are ignored; known ones are validated and persisted:
+Two ways to change the runtime config; both clamp values (10..86400 s) and
+persist to NVS, and take effect on the next cycle:
 
-```json
-{ "sample_s": 300, "report_s": 1800, "en": { "garage": false } }
-```
+1. **Bulk JSON** — `rental/<device>/config` (retained). Unknown fields ignored:
+   ```json
+   { "sample_s": 300, "report_s": 1800, "en": { "garage": false } }
+   ```
+2. **Per-key** — `rental/<device>/config/sample_s` and `.../config/report_s`
+   (retained), each a plain integer of seconds. Separate topics so two settings
+   never overwrite each other's retained value while the device is offline. These
+   back the Home Assistant `number` controls (see `mosquitto/ha-mqtt.yaml`); the
+   controls read the live value back from the `health` topic's `sample_s`/`report_s`.
 
 ## Command topic — `rental/<device>/cmd` (device subscribes)
 
