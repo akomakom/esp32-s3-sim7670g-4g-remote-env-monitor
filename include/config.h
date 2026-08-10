@@ -216,7 +216,7 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #ifndef MQTT_PASSWORD
   #define MQTT_PASSWORD       "change-me"
 #endif
-#define MQTT_KEEPALIVE_S      60
+#define MQTT_KEEPALIVE_S      600      // Adds a periodic ping that uses data
 #define MQTT_QOS              1        // at-least-once; HA de-dups on timestamp
 #define MQTT_CLEAN_SESSION    false    // persistent session -> fewer resubs (§5)
 
