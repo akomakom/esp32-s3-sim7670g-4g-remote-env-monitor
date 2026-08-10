@@ -196,10 +196,10 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 //  4.  MQTT / TLS TRANSPORT  (spec §3, §5, §7)
 // -----------------------------------------------------------------------------
 #ifndef MQTT_HOST
-  #define MQTT_HOST           "broker.example.com"   // RESOLVE: your broker
+  #define MQTT_HOST           "broker.example.com"  // RESOLVE: your broker (set in secrets.h)
 #endif
 #ifndef MQTT_PORT
-  #define MQTT_PORT           8883                    // dedicated TLS port
+  #define MQTT_PORT           8883                  // TLS port (override in secrets.h)
 #endif
 #ifndef MQTT_USERNAME
   #define MQTT_USERNAME       "rental-mon-01"         // per-device creds (§7)
@@ -263,8 +263,11 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 // -----------------------------------------------------------------------------
 #define OTA_ENABLED           true
 // Only URLs on this HTTPS host prefix are accepted (defends the data budget and
-// blocks arbitrary-URL abuse of the cmd topic).  RESOLVE: your update host.
-#define OTA_ALLOWED_PREFIX    "https://broker.example.com/"
+// blocks arbitrary-URL abuse of the cmd topic).  RESOLVE: your update host
+// (override in secrets.h so your real host isn't committed).
+#ifndef OTA_ALLOWED_PREFIX
+  #define OTA_ALLOWED_PREFIX  "https://ota.example.com/"
+#endif
 #define OTA_HEALTHCHECK_S     60      // must stay healthy this long or rollback
 
 // -----------------------------------------------------------------------------

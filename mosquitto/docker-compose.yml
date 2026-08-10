@@ -3,7 +3,7 @@
 #
 # Ports (host, because network_mode: host):
 #   1883  plaintext / LAN
-#   8883  TLS + mutual auth  (forward WAN 8883 -> this host:8883 on your router)
+#   8883  TLS + mutual auth  (port-forward your WAN port -> this host:8883)
 services:
   mosquitto:
     image: eclipse-mosquitto:2

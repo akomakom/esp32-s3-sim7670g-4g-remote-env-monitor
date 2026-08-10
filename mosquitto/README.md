@@ -8,10 +8,10 @@ Docker with `--net=host`. Two listeners:
 | `1883` | plaintext | anonymous | LAN / Home Assistant (unchanged) |
 | `8883` | **TLS 1.2** | **mutual cert + username/password** | internet-facing device uplink |
 
-The device connects to `MQTT_HOST:MQTT_PORT` = **`broker.example.com:8883`**
-(from `include/config.h`). Forward **WAN `8883` → this host `8883`** on your
-router. TLS validates the *hostname*, not the port, so the port translation is
-fine — the server cert's SAN is `broker.example.com`.
+The device connects to `MQTT_HOST:MQTT_PORT` (set these in
+`include/secrets/secrets.h`). Point your router's port-forward at **this host's
+`8883`** — you can use any external WAN port you like, since TLS validates the
+*hostname*, not the port. The server cert's SAN must match your `MQTT_HOST`.
 
 ```
 files here
@@ -190,4 +190,4 @@ entities use the health topic's `online` flag for availability.
 - **Key permissions:** if the broker log says it can't read `server.key`, it's
   the uid-1883 ownership step in §3b.
 - **1883 stays open on all interfaces** (your choice). It's plaintext and
-  anonymous — keep it off the WAN; only forward `8883` to `8883`.
+  anonymous — keep it off the WAN; only port-forward the TLS listener (`8883`).
