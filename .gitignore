@@ -2,3 +2,13 @@
 .vscode/
 # Real TLS material / secrets — commit the .example.h template instead.
 include/secrets/ca_cert.h
+
+# ESP-IDF/PlatformIO build artifacts (generated; framework = arduino, espidf).
+# Commit sdkconfig.defaults (the source of truth) but NOT the generated per-env
+# sdkconfig or the fetched components. dependencies.lock IS committed for
+# reproducible component versions.
+sdkconfig.rental_monitor
+managed_components/
+.dummy/
+CMakeLists.txt
+src/CMakeLists.txt

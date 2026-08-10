@@ -46,12 +46,18 @@
 //  them against your board revision before trusting hardware. Strapping pins
 //  (0,3,45,46) and USB pins (19,20) are intentionally avoided for sensors.
 //
-//  The SIM7670G modem UART is fixed by the board and must NOT be reused.
+//  The SIM7670G modem UART on the ESP32-S3-SIM7670G-4G. Pin order verified
+//  against a working community sketch for this board (Serial1 rx=17, tx=18):
+//    https://gist.github.com/leighghunt/016f615ba5af4816482cd7d264b68411
+//  i.e. ESP32 RX=17 (from modem TX), ESP32 TX=18 (to modem RX). NOTE: the modem
+//  also exposes a USB interface (routed by the DIP switches); this firmware uses
+//  the GPIO UART path. Ensure the "4G" DIP is ON (powers the module) — there is
+//  no GPIO PWRKEY to pulse, so PIN_MODEM_PWRKEY is -1.
 #define MODEM_UART_NUM        1
-#define PIN_MODEM_TX          17   // ESP32 -> modem RX   (Waveshare default)
-#define PIN_MODEM_RX          18   // ESP32 <- modem TX
-#define PIN_MODEM_PWRKEY      4    // pulse to power the SIM7670G on
-#define PIN_MODEM_DTR         5    // optional sleep/wake control (-1 if unused)
+#define PIN_MODEM_TX          18   // ESP32 -> modem RX
+#define PIN_MODEM_RX          17   // ESP32 <- modem TX
+#define PIN_MODEM_PWRKEY      -1   // module is powered by the onboard DIP switch
+#define PIN_MODEM_DTR         -1   // not wired to a usable GPIO on this board
 #define MODEM_BAUD            115200
 
 // I2C bus for the local (crawlspace) SHT40. Pick a free SDA/SCL pair.
@@ -162,6 +168,18 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #define CELL_PASS             ""
 #define CELL_PIN              ""           // SIM PIN, "" if none
 #define CELL_DIAL_TIMEOUT_S   90           // give the modem time to attach
+// Bring-up aid: in command mode, query signal/operator via esp_modem and log it.
+#define CELL_MODEM_DIAG       1
+
+// --- USB modem transport ---
+//  This board wires the SIM7670G to the ESP32-S3 over USB (not the GPIO UART);
+//  PPP over UART is unsupported by this modem. We drive it as a USB CDC-ACM host
+//  (esp_modem USB DTE). Set the USB DIP so the 4G module routes to the ESP32-S3.
+//  VID/PID from `lsusb` (Qualcomm composite). The AT-command CDC-ACM interface is
+//  IF2 ("at"); if dialing there ever fails, IF6 ("ppp") is the alternative.
+#define CELL_USB_VID          0x05C6
+#define CELL_USB_PID          0x9330
+#define CELL_USB_ITF          2
 
 // -----------------------------------------------------------------------------
 //  4.  MQTT / TLS TRANSPORT  (spec §3, §5, §7)

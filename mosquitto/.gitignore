@@ -1,0 +1,10 @@
+# Never commit private keys, generated certs, or the password file.
+certs/
+config/passwd
+data/
+log/
+.env
+
+# Python bytecode cache
+__pycache__/
+*.pyc

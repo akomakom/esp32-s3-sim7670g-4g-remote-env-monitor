@@ -1,0 +1,52 @@
+# =============================================================================
+#  ESP-IDF sdkconfig defaults for the Rental Monitor (framework = arduino, espidf)
+#  Seeds a fresh sdkconfig; delete sdkconfig.rental_monitor to re-apply.
+#  IMPORTANT: no inline comments after a value — the parser reads the whole line
+#  as the value, so put comments on their own line.
+# =============================================================================
+
+# --- Arduino as an ESP-IDF component ---
+CONFIG_AUTOSTART_ARDUINO=y
+# our loop() does TLS; give the Arduino loop task stack headroom
+CONFIG_ARDUINO_LOOP_STACK_SIZE=16384
+# Arduino requires a 1 kHz FreeRTOS tick
+CONFIG_FREERTOS_HZ=1000
+
+# --- CPU ---
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# --- Flash: 16 MB, QIO @ 80 MHz (module is qio_opi: flash QIO, PSRAM OPI) ---
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# --- Custom dual-OTA partition table (rollback) ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_ota.csv"
+
+# --- Core dump to the coredump partition (present in partitions_ota.csv) ---
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# --- PPP over the USB modem (esp_modem drives the PPP netif) ---
+CONFIG_LWIP_PPP_SUPPORT=y
+CONFIG_LWIP_PPP_PAP_SUPPORT=y
+CONFIG_LWIP_PPP_CHAP_SUPPORT=y
+
+# --- USB host: the 4G module may sit behind the board's internal USB hub ---
+CONFIG_USB_HOST_HUBS_SUPPORTED=y
+
+# --- mbedTLS options Arduino's NetworkClientSecure/ssl_client.cpp requires ---
+# Without PSK modes, ssl_client.cpp compiles its whole implementation out (guarded
+# by MBEDTLS_KEY_EXCHANGE_SOME_PSK_ENABLED) -> undefined start_ssl_client etc.
+CONFIG_MBEDTLS_PSK_MODES=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_PSK=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_DHE_PSK=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_ECDHE_PSK=y
+CONFIG_MBEDTLS_KEY_EXCHANGE_RSA_PSK=y
+# ssl_client.cpp includes esp_crt_bundle.h and references the bundle attach.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+
+# NOTE: PSRAM intentionally OFF — firmware fits in internal RAM (~16% used),
+# avoiding PSRAM-timing config pitfalls. Enable CONFIG_SPIRAM + _MODE_OCT later
+# if needed.

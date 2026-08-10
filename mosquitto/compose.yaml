@@ -1,0 +1,39 @@
+# =============================================================================
+#  Compose for the Rental Monitor HA decode bridge (ha-bridge.py).
+#
+#  There is no ready-made public image for this project-specific MessagePack
+#  decode, so we build a tiny one from the Dockerfile here (which bakes in
+#  ha-bridge.py). Matches your existing stack: network_mode: host, TZ set.
+#
+#  Deploy: copy this whole `mosquitto/` dir to the broker host (it contains the
+#  Dockerfile + ha-bridge.py), then either run it on its own:
+#       docker compose -f compose.yaml up -d --build
+#  or paste the `rental-bridge:` service below into your main compose file and
+#  point `build:` at wherever you put these files.
+#
+#  Secret: put the MQTT password in a .env file next to this compose:
+#       echo "RENTAL_MQTT_PASS=your-strong-password" > .env
+#  (or set RENTAL_MQTT_PASS in the environment). Defaults to change-me.
+# =============================================================================
+services:
+  rental-bridge:
+    container_name: rental-bridge
+    build: .                       # Dockerfile + ha-bridge.py in this directory
+    image: rental-bridge:latest
+    restart: unless-stopped
+    network_mode: host             # talk to mosquitto on localhost, like the rest
+    depends_on:
+      - mosquitto                  # remove this line if the service isn't in THIS compose file
+    volumes:
+      # Reuse the broker's cert dir (read-only). ha-bridge only needs ca + client.*
+      - /data-fast/HOMEASSISTANT/MOSQUITTO/certs:/certs:ro
+    environment:
+      - TZ=America/New_York
+      - MQTT_HOST=localhost        # broker is on the same host (net=host)
+      - MQTT_PORT=8883             # broker's internal TLS listener
+      - MQTT_USER=rental-mon-01
+      - MQTT_PASS=${RENTAL_MQTT_PASS:-change-me}
+      - MQTT_CA=/certs/ca.crt
+      - MQTT_CERT=/certs/client.crt
+      - MQTT_KEY=/certs/client.key
+      # - MQTT_DATA_SUB=rental/+/data   # override if you change the topic base

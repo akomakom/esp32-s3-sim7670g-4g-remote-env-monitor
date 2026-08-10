@@ -1,2 +1,7 @@
 dependencies:
   idf: '>=5.1'
+  # USB-host cellular (Option A): declaring these here makes the app "main"
+  # component depend on them, so src/cellular.cpp can #include the USB DTE headers
+  # (esp_modem_usb_c_api.h / esp_modem_usb_config.h). esp_modem_usb_dte pulls in
+  # esp_modem + usb_host_cdc_acm transitively.
+  espressif/esp_modem_usb_dte: '^1.2.0'

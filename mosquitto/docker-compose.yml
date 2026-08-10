@@ -1,0 +1,17 @@
+# Mosquitto broker for the Rental Monitor (host networking, TLS + plaintext).
+# Run on the broker host from this directory:  docker compose up -d
+#
+# Ports (host, because network_mode: host):
+#   1883  plaintext / LAN
+#   8883  TLS + mutual auth  (forward WAN 8883 -> this host:8883 on your router)
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config:/mosquitto/config          # mosquitto.conf, passwd
+      - ./certs:/mosquitto/config/certs:ro  # ca/server/client certs (read-only)
+      - ./data:/mosquitto/data
+      - ./log:/mosquitto/log
