@@ -60,6 +60,33 @@ static void onModemError(esp_modem_terminal_error_t err) {
 
 // Create the PPP netif (once) and open the USB modem DCE. Returns false if the
 // modem doesn't enumerate (bad DIP/cabling) — caller retries later.
+// Read signal quality (CSQ -> dBm) + operator name in command mode and update
+// g_rsrp. Called at modem init AND on each reconnect, so the reported signal
+// tracks reality (e.g. after swapping the antenna). Cannot run during PPP data
+// mode (no CMUX), so between reconnects g_rsrp holds the last measured value.
+static void refreshSignal() {
+  if (!s_dce) return;
+  // The modem may still be (re)registering right after a connect (esp. after an
+  // ESP reset), so AT+CSQ can transiently return 99 = unknown. Retry briefly,
+  // and NEVER clobber a previously-good reading with an unknown/failed one — a
+  // stale-but-real dBm is far more useful than a misleading 0.
+  int csq = 99, ber = 0;
+  for (int i = 0; i < 6; i++) {
+    esp_modem_sync(s_dce);
+    if (esp_modem_get_signal_quality(s_dce, &csq, &ber) == ESP_OK && csq >= 0 && csq <= 31) break;
+    delay(400);
+  }
+  if (csq >= 0 && csq <= 31) {
+    g_rsrp = -113 + 2 * csq;   // valid CSQ index -> dBm
+    LOGI("cellular: signal CSQ=%d (%d dBm)", csq, g_rsrp);
+  } else {
+    LOGW("cellular: signal unknown (csq=%d) — keeping %d dBm", csq, g_rsrp);
+  }
+  char op[sizeof(g_oper)] = {0}; int act = 0;
+  if (esp_modem_get_operator_name(s_dce, op, &act) == ESP_OK && op[0])
+    strncpy(g_oper, op, sizeof(g_oper) - 1);   // only overwrite on a non-empty read
+}
+
 static bool createModem() {
   if (!s_ppp_netif) {
     esp_netif_config_t cfg = ESP_NETIF_DEFAULT_PPP();
@@ -85,21 +112,7 @@ static bool createModem() {
   esp_modem_set_error_cb(s_dce, onModemError);
   g_usb_gone = false;
 
-#if CELL_MODEM_DIAG
-  // One-shot command-mode diagnostics before dialing (best effort).
-  esp_modem_sync(s_dce);
-  int csq = 0, ber = 0;
-  if (esp_modem_get_signal_quality(s_dce, &csq, &ber) == ESP_OK) {
-    // esp_modem returns the raw AT+CSQ index (0..31, or 99 = unknown), NOT dBm.
-    // Convert to dBm so it reads correctly (e.g. CSQ 13 -> -87 dBm) and matches
-    // Home Assistant's signal_strength/dBm device class.
-    g_rsrp = (csq >= 0 && csq <= 31) ? (-113 + 2 * csq) : 0;   // 0 = unknown
-    LOGI("cellular: signal CSQ=%d (%d dBm) ber=%d", csq, g_rsrp, ber);
-  }
-  int act = 0;
-  if (esp_modem_get_operator_name(s_dce, g_oper, &act) == ESP_OK)
-    LOGI("cellular: operator '%s' (act %d)", g_oper, act);
-#endif
+  refreshSignal();   // initial signal / operator read (command mode)
   return true;
 }
 
@@ -138,6 +151,7 @@ bool ensureConnected() {
     LOGW("cellular: re-dialing PPP");
     esp_modem_set_mode(s_dce, ESP_MODEM_MODE_COMMAND);  // best-effort back to cmd
     delay(1000);
+    refreshSignal();   // command mode now -> re-measure signal before re-dialing
   }
   return dial();
 }
