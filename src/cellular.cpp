@@ -88,10 +88,13 @@ static bool createModem() {
 #if CELL_MODEM_DIAG
   // One-shot command-mode diagnostics before dialing (best effort).
   esp_modem_sync(s_dce);
-  int rssi = 0, ber = 0;
-  if (esp_modem_get_signal_quality(s_dce, &rssi, &ber) == ESP_OK) {
-    g_rsrp = rssi;
-    LOGI("cellular: signal rssi=%d ber=%d", rssi, ber);
+  int csq = 0, ber = 0;
+  if (esp_modem_get_signal_quality(s_dce, &csq, &ber) == ESP_OK) {
+    // esp_modem returns the raw AT+CSQ index (0..31, or 99 = unknown), NOT dBm.
+    // Convert to dBm so it reads correctly (e.g. CSQ 13 -> -87 dBm) and matches
+    // Home Assistant's signal_strength/dBm device class.
+    g_rsrp = (csq >= 0 && csq <= 31) ? (-113 + 2 * csq) : 0;   // 0 = unknown
+    LOGI("cellular: signal CSQ=%d (%d dBm) ber=%d", csq, g_rsrp, ber);
   }
   int act = 0;
   if (esp_modem_get_operator_name(s_dce, g_oper, &act) == ESP_OK)

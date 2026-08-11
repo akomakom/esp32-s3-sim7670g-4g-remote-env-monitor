@@ -228,6 +228,7 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #define TOPIC_HEALTH          TOPIC_BASE "/health"
 #define TOPIC_CONFIG          TOPIC_BASE "/config"   // retained, device subs (bulk JSON)
 #define TOPIC_CMD             TOPIC_BASE "/cmd"       // device subs
+#define TOPIC_CMD_NOW         TOPIC_BASE "/cmd/report_now" // device subs (HA button)
 #define TOPIC_ACK             TOPIC_BASE "/ack"       // device publishes
 // Per-key retained config topics for simple HA `number` controls. Separate
 // topics so two settings never overwrite each other's retained value (matters

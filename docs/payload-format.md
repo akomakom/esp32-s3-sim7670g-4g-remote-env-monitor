@@ -62,10 +62,14 @@ persist to NVS, and take effect on the next cycle:
    back the Home Assistant `number` controls (see `mosquitto/ha-mqtt.yaml`); the
    controls read the live value back from the `health` topic's `sample_s`/`report_s`.
 
-## Command topic — `rental/<device>/cmd` (device subscribes)
+## Command topics — `rental/<device>/cmd…` (device subscribes)
 
-Explicit, host-gated OTA only (spec §4.5):
+Explicit, host-gated OTA (spec §4.5) on `rental/<device>/cmd`:
 
 ```json
 { "cmd": "ota", "url": "https://ota.example.com/rental-mon-01/fw-1.1.0.bin" }
 ```
+
+**Report now** — `rental/<device>/cmd/report_now`: any payload triggers an
+immediate sample of all sensors + publish, without waiting for the report
+interval. Backs the Home Assistant "Report Now" button in `mosquitto/ha-mqtt.yaml`.

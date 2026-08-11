@@ -10,8 +10,10 @@ namespace mqtt {
 
 // Called when a firmware-update command arrives on the cmd topic.
 typedef void (*OtaCmdHandler)(const char* url);
+// Called when a "report now" command arrives (HA button) — sample + publish now.
+typedef void (*ReportNowHandler)();
 
-void   begin(OtaCmdHandler ota_cb);
+void   begin(OtaCmdHandler ota_cb, ReportNowHandler now_cb = nullptr);
 bool   ensureConnected();          // (re)connect if the session dropped
 void   loop();                     // service keepalive + inbound messages
 bool   isConnected();

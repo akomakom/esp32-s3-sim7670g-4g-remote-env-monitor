@@ -53,6 +53,15 @@ static void onOtaCommand(const char* url) {
   mqtt::publishString(TOPIC_ACK, "{\"ota\":\"failed\"}");
 }
 
+// "Report now" callback (HA button): sample every sensor and publish this loop,
+// instead of waiting for the next scheduled sample/report. mqtt::loop() runs
+// before the sample/report checks in loop(), so due-timers set here fire now.
+static void onReportNow() {
+  LOGI("cmd: report-now requested");
+  g_next_sample_ms = millis();
+  g_next_report_ms = millis();
+}
+
 // -----------------------------------------------------------------------------
 void setup() {
   logInit();
@@ -90,10 +99,11 @@ void setup() {
 #if CELLULAR_ENABLED
   cellular::begin();
   timesync::begin();
-  mqtt::begin(onOtaCommand);
+  mqtt::begin(onOtaCommand, onReportNow);
 #else
   LOGW("bench mode: CELLULAR_ENABLED=0 — modem/NTP/MQTT disabled, sensors only");
   (void)onOtaCommand;
+  (void)onReportNow;
 #endif
 
   uint32_t now = millis();

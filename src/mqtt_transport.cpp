@@ -12,6 +12,7 @@ namespace mqtt {
 static NetworkClientSecure tls;
 static PubSubClient        client(tls);
 static OtaCmdHandler       g_ota_cb = nullptr;
+static ReportNowHandler    g_now_cb = nullptr;
 
 static uint32_t g_sent = 0, g_recv = 0;
 static uint32_t g_day  = 0;   // UTC day number for the byte counters
@@ -40,6 +41,10 @@ static void onMessage(char* topic, uint8_t* payload, unsigned int len) {
     rconfig::setReportIntervalS(strtoul(String((char*)payload, len).c_str(), nullptr, 10));
     return;
   }
+  if (strcmp(topic, TOPIC_CMD_NOW) == 0) {   // HA "Report Now" button
+    if (g_now_cb) g_now_cb();
+    return;
+  }
   if (strcmp(topic, TOPIC_CMD) == 0) {
     // Minimal command channel. OTA is explicit and host-gated (spec §4.5/§8).
     // Format: {"cmd":"ota","url":"https://ota.example.com/fw.bin"}
@@ -55,8 +60,9 @@ static void onMessage(char* topic, uint8_t* payload, unsigned int len) {
   }
 }
 
-void begin(OtaCmdHandler ota_cb) {
+void begin(OtaCmdHandler ota_cb, ReportNowHandler now_cb) {
   g_ota_cb = ota_cb;
+  g_now_cb = now_cb;
 
   if (MQTT_TLS_INSECURE) {
     tls.setInsecure();
@@ -95,6 +101,7 @@ bool ensureConnected() {
   client.subscribe(TOPIC_CMD,        MQTT_QOS);
   client.subscribe(TOPIC_CFG_SAMPLE, MQTT_QOS);  // retained per-key config (HA numbers)
   client.subscribe(TOPIC_CFG_REPORT, MQTT_QOS);
+  client.subscribe(TOPIC_CMD_NOW,    MQTT_QOS);  // HA "Report Now" button
   LOGI("mqtt: connected, subscribed to config+cmd");
   return true;
 }
