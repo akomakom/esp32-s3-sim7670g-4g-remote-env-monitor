@@ -29,7 +29,7 @@
 // -----------------------------------------------------------------------------
 //  0.  BUILD / IDENTITY
 // -----------------------------------------------------------------------------
-#define FW_VERSION            "1.0.1"          // reported in health telemetry
+#define FW_VERSION            "1.0.2"          // reported in health telemetry
 #ifndef DEVICE_ID
   #define DEVICE_ID           "rental-mon-01"  // unique per unit; used in topics
 #endif
@@ -200,6 +200,13 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #define CELL_USB_VID          0x05C6
 #define CELL_USB_PID          0x9330
 #define CELL_USB_ITF          2
+
+// NOTE: CMUX (AT + PPP multiplexed, which would allow LIVE signal polling) was
+// tried and does NOT work on this SIM7670G-over-USB board — set_mode(CMUX)
+// returns ESP_FAIL and hangs into a watchdog reboot loop, and it even left the
+// modem stuck so plain DATA mode then failed until a modem power-cycle. Do not
+// re-add it. Signal is therefore only read in the command-mode window at
+// (re)connect (see refreshSignal), so rssi is a snapshot, not continuous.
 
 // -----------------------------------------------------------------------------
 //  4.  MQTT / TLS TRANSPORT  (spec §3, §5, §7)

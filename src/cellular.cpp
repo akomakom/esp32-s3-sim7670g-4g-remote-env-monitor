@@ -157,8 +157,9 @@ bool ensureConnected() {
 }
 
 void loop() {
-  // Signal quality can't be polled while in PPP data mode without CMUX; g_rsrp
-  // holds the value captured at connect time (see createModem diagnostics).
+  // Signal is only sampled in the command-mode window at (re)connect (see
+  // refreshSignal); g_rsrp holds the last measured value between reconnects.
+  // (CMUX would allow live polling but doesn't work on this modem — see config.h.)
 }
 
 int         signalRSRP()   { return g_rsrp; }
