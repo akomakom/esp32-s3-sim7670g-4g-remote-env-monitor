@@ -117,8 +117,16 @@ void setup() {
 //  Sampling: read every enabled sensor, stamp UTC, persist to flash buffer.
 // -----------------------------------------------------------------------------
 static void doSample() {
-  uint32_t ts = timesync::nowUtc();   // 0 if clock not yet synced
   const auto& cfg = rconfig::get();
+
+  // Power the RS485 sensors on only for this read window (if power-switched and
+  // at least one is enabled), so they can't self-heat from being always-on.
+  bool any_rs485 = false;
+  for (uint8_t i = 0; i < SENSOR_COUNT; i++)
+    if (SENSORS[i].bus == BUS_RS485 && (i >= 16 || cfg.sensor_enabled[i])) { any_rs485 = true; break; }
+  if (any_rs485) sensors::rs485PowerOn();   // includes the warm-up delay
+
+  uint32_t ts = timesync::nowUtc();   // stamp at read time (after warm-up); 0 if unsynced
   int ok = 0;
   for (uint8_t i = 0; i < SENSOR_COUNT; i++) {
     if (i < 16 && !cfg.sensor_enabled[i]) continue;
@@ -128,6 +136,8 @@ static void doSample() {
     ringbuf::push(r);                 // persisted BEFORE any network attempt
     ok++;
   }
+
+  if (any_rs485) sensors::rs485PowerOff();
   LOGI("sampled %d readings, %u buffered", ok, (unsigned)ringbuf::count());
 }
 

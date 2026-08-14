@@ -84,6 +84,15 @@
 // (many Waveshare modules are). Otherwise wire DE+RE together to this pin.
 #define PIN_RS485_DE_RE       -1
 
+// Optional power switch for the RS485 sensors: a single GPIO drives a MOSFET gate
+// (steady digital on/off — NOT PWM). The sensors are powered ONLY during a Modbus
+// read, so they can't self-heat from being always-on (they read true ambient
+// right after power-up). -1 = permanently powered (no switching).
+#define PIN_RS485_POWER       -1
+// Gate polarity: true = driving the pin HIGH turns the sensors ON (typical low-
+// side N-MOSFET / HIGH-active driver module); false = active-low.
+#define RS485_POWER_ACTIVE_HIGH  true
+
 // Onboard status RGB LED (WS2812). -1 disables LED status.
 #define PIN_RGB_LED           38
 
@@ -120,6 +129,10 @@
 #define MODBUS_HUM_SCALE      0.1f   // raw * scale = %RH
 #define MODBUS_ADDR_REGISTER  0x0101 // holding register storing the slave addr
 #define MODBUS_TIMEOUT_MS     500
+// After switching the RS485 sensors on (PIN_RS485_POWER), wait this long for the
+// transmitters to boot and be ready to answer Modbus before reading. Tune to
+// your sensors (XY-MD02-class boot ~1s). Ignored if not power-switched.
+#define RS485_POWER_WARMUP_MS 1500
 
 // ---- Hot tub water temperature over ESP-NOW ----
 //  The unit also subscribes to a separate ESP32 hot tub controller over ESP-NOW

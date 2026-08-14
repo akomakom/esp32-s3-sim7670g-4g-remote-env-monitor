@@ -19,6 +19,13 @@ static ModbusMaster   modbus;
 static void rs485PreTx()  { if (PIN_RS485_DE_RE >= 0) digitalWrite(PIN_RS485_DE_RE, HIGH); }
 static void rs485PostTx() { if (PIN_RS485_DE_RE >= 0) digitalWrite(PIN_RS485_DE_RE, LOW);  }
 
+// ---- RS485 sensor power switch (MOSFET gate; steady on/off) ----
+static void rs485PowerSet(bool on) {
+  if (PIN_RS485_POWER < 0) return;
+  bool level = RS485_POWER_ACTIVE_HIGH ? on : !on;
+  digitalWrite(PIN_RS485_POWER, level ? HIGH : LOW);
+}
+
 void begin() {
   // --- I2C SHT40 ---
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, I2C_FREQ_HZ);
@@ -39,6 +46,13 @@ void begin() {
   }
   modbus.preTransmission(rs485PreTx);
   modbus.postTransmission(rs485PostTx);
+  // RS485 sensor power switch: start OFF (energised only during reads).
+  if (PIN_RS485_POWER >= 0) {
+    pinMode(PIN_RS485_POWER, OUTPUT);
+    rs485PowerSet(false);
+    LOGI("RS485 sensors power-switched on GPIO%d (%s-active)", PIN_RS485_POWER,
+         RS485_POWER_ACTIVE_HIGH ? "high" : "low");
+  }
   LOGI("RS485 bus @%d baud ready", RS485_BAUD);
 }
 
@@ -124,6 +138,14 @@ Reading read(uint8_t idx) {
   return r;
 }
 
+void rs485PowerOn() {
+  if (PIN_RS485_POWER < 0) return;
+  rs485PowerSet(true);
+  delay(RS485_POWER_WARMUP_MS);   // let the transmitters boot before we poll them
+}
+
+void rs485PowerOff() { rs485PowerSet(false); }
+
 // -----------------------------------------------------------------------------
 //  RS485 provisioning tool (spec §2) — assign unique slave addresses one by one.
 // -----------------------------------------------------------------------------
@@ -135,6 +157,7 @@ static uint16_t readLine(uint8_t deflt) {
 }
 
 void runProvisioningTool() {
+  rs485PowerOn();   // keep the sensors energised for the interactive session
   Serial.println();
   Serial.println(F("=== RS485 SHT40 addressing tool ==="));
   Serial.println(F("Connect ONE sensor at a time. It ships as address 01."));
