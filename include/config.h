@@ -29,7 +29,7 @@
 // -----------------------------------------------------------------------------
 //  0.  BUILD / IDENTITY
 // -----------------------------------------------------------------------------
-#define FW_VERSION            "1.0.2"          // reported in health telemetry
+#define FW_VERSION            "1.0.3"          // reported in health telemetry
 #ifndef DEVICE_ID
   #define DEVICE_ID           "rental-mon-01"  // unique per unit; used in topics
 #endif

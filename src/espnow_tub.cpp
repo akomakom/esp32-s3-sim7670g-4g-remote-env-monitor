@@ -30,8 +30,18 @@ static PairingStatus  s_status          = NOT_PAIRED;
 static int            s_channel         = HOTTUB_MAX_CHANNEL; // 11 is most common
 static uint32_t       s_last_channel_ms = 0;    // when we last (re)sent a request
 static uint32_t       s_retry_begin_ms  = 0;    // backoff for re-init after failure
+static uint8_t        s_radio_ch        = 0;    // channel currently set on the radio
 
 static const uint8_t  BROADCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+// Set the radio channel, but only actually switch when it changes (re-setting the
+// channel is disruptive). After pairing this is what LOCKS us onto the
+// controller's channel so we hear its broadcasts and its replies get ACKed.
+static void setRadioChannel(uint8_t chan) {
+  if (chan == s_radio_ch) return;
+  if (esp_wifi_set_channel(chan, WIFI_SECOND_CHAN_NONE) == ESP_OK) s_radio_ch = chan;
+  else LOGD("espnow: set_channel %d failed", chan);
+}
 
 // -----------------------------------------------------------------------------
 // Ensure a peer exists for `mac` on `chan`. Failure-tolerant: logs and returns
@@ -57,9 +67,12 @@ static void onDataRecv(const esp_now_recv_info* info, const uint8_t* data, int l
 
   switch (type) {
     case SERVER_STATUS: {
-      if (len < (int)sizeof(struct_status_server)) return;   // truncated -> drop
-      struct_status_server st;
-      memcpy(&st, data, sizeof(st));
+      // Bound the copy by the received length into a zero-initialised struct so a
+      // controller built with a slightly different (older/newer) struct layout
+      // still parses — missing trailing fields default to 0 (per the client guide).
+      struct_status_server st = {};
+      size_t n = (len < (int)sizeof(st)) ? (size_t)len : sizeof(st);
+      memcpy(&st, data, n);
       portENTER_CRITICAL(&s_mux);
       s_water_temp_f = st.water_temp;
       s_last_recv_ms = millis();
@@ -89,11 +102,11 @@ static void onDataRecv(const esp_now_recv_info* info, const uint8_t* data, int l
 
 // -----------------------------------------------------------------------------
 // Send a pairing request on the current channel (broadcast).
-static void sendPairingRequest() {
+static void sendPairingRequest(uint8_t chan) {
   struct_pairing pd = {};
   pd.msgType  = PAIRING;
   pd.board_id = HOTTUB_BOARD_ID;
-  pd.channel  = (uint8_t)s_channel;
+  pd.channel  = chan;                    // must match the radio channel we're on
   esp_err_t e = esp_now_send(BROADCAST_MAC, (const uint8_t*)&pd, sizeof(pd));
   if (e != ESP_OK) LOGD("espnow: pairing send failed (0x%x)", e);
 }
@@ -123,8 +136,9 @@ static bool initRadio() {
     return false;
   }
 
-  s_channel = HOTTUB_MAX_CHANNEL;
-  s_status  = PAIR_REQUEST;
+  s_channel  = HOTTUB_MAX_CHANNEL;
+  s_radio_ch = 0;                        // force setRadioChannel() to re-apply
+  s_status   = PAIR_REQUEST;
   LOGI("espnow: hot tub client up (MAC %s), searching channels %d..1",
        WiFi.macAddress().c_str(), HOTTUB_MAX_CHANNEL);
   return true;
@@ -153,9 +167,11 @@ void loop() {
   // Read the small bits of state the recv callback may have changed.
   PairingStatus status;
   uint32_t last_recv;
+  uint8_t  channel;
   portENTER_CRITICAL(&s_mux);
   status    = s_status;
   last_recv = s_last_recv_ms;
+  channel   = (uint8_t)s_channel;
   portEXIT_CRITICAL(&s_mux);
 
   const uint32_t now = millis();
@@ -163,9 +179,8 @@ void loop() {
   switch (status) {
     case NOT_PAIRED:                     // shouldn't happen once initRadio ran
     case PAIR_REQUEST:
-      if (esp_wifi_set_channel((uint8_t)s_channel, WIFI_SECOND_CHAN_NONE) != ESP_OK)
-        LOGD("espnow: set_channel %d failed", s_channel);
-      sendPairingRequest();
+      setRadioChannel(channel);          // hop to this candidate channel
+      sendPairingRequest(channel);       // advertise the SAME channel we're on
       s_last_channel_ms = now;
       portENTER_CRITICAL(&s_mux);
       if (s_status == PAIR_REQUEST) s_status = PAIR_REQUESTED; // don't clobber a
@@ -187,6 +202,13 @@ void loop() {
       break;
 
     case PAIR_PAIRED:
+      // Lock the radio onto the controller's channel. The recv callback set
+      // s_channel from the pairing reply but cannot switch the radio from its
+      // context; without this the radio can be left on whatever hop channel the
+      // reply arrived on (adjacent-channel leak), so we never hear the controller's
+      // broadcasts and its unicast replies fail to ACK -> Delivery Fail forever.
+      setRadioChannel(channel);
+
       // If the controller goes quiet (restart / channel change), rediscover.
       if (last_recv == 0 || (now - last_recv) > HOTTUB_MESSAGE_MAX_AGE_MS) {
         LOGW("espnow: hot tub silent >%lums, re-pairing",
@@ -213,6 +235,7 @@ bool latestWaterTempC(float& out_c, uint32_t max_age_ms) {
   portEXIT_CRITICAL(&s_mux);
 
   if (!have || isnan(f)) return false;
+  if (f == 0.0f) return false;                        // 0 °F = controller's sensor-fault sentinel
   if ((millis() - last) > max_age_ms) return false;   // stale -> not a valid read
 
   out_c = (f - 32.0f) * (5.0f / 9.0f);                // controller sends °F
