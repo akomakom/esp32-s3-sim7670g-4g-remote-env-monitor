@@ -27,6 +27,7 @@
 #include "health.h"
 #include "ota.h"
 #include "espnow_tub.h"
+#include "led.h"
 
 // ---- scheduling state ----
 static uint32_t g_next_sample_ms = 0;
@@ -48,6 +49,7 @@ static void feedWatchdog() { esp_task_wdt_reset(); }
 
 // OTA command callback (invoked from the MQTT layer on an explicit command).
 static void onOtaCommand(const char* url) {
+  led::set(led::OTA);
   mqtt::publishString(TOPIC_ACK, "{\"ota\":\"starting\"}");
   ota::applyFromUrl(url); // reboots on success; returns on failure
   mqtt::publishString(TOPIC_ACK, "{\"ota\":\"failed\"}");
@@ -66,6 +68,8 @@ static void onReportNow() {
 void setup() {
   logInit();
   LOGI("=== Rental Monitor %s booting (%s) ===", FW_VERSION, DEVICE_ID);
+  led::begin();
+  led::set(led::BOOT);
 
   // Hardware watchdog: auto-reboot if the main loop ever hangs (spec §6).
   // The Arduino core already inits the Task WDT at startup, so a plain
@@ -87,6 +91,7 @@ void setup() {
   // One-time RS485 provisioning path (spec §2): config flag or BOOT held.
   if (PROVISIONING_MODE || bootButtonHeld()) {
     esp_task_wdt_delete(NULL);  // interactive tool blocks; don't trip the WDT
+    led::set(led::PROVISION);
     sensors::runProvisioningTool();
     LOGI("Provisioning done — reflash with PROVISIONING_MODE=false to deploy.");
     while (true) { delay(1000); }
@@ -147,8 +152,11 @@ static void doSample() {
 // -----------------------------------------------------------------------------
 static void doReport() {
   if (!mqtt::isConnected()) return;
+  if (ringbuf::count() == 0) return;   // nothing buffered -> no send to signal
   static Reading batch[MAX_BATCH_READINGS];
   static uint8_t buf[MQTT_BUFFER_BYTES];
+  led::event(led::SENDING, 5000);      // cyan while draining; result overwrites below
+  bool failed = false;
 
   // Drain at most MAX_REPORT_BATCHES_PER_CYCLE per call. A large backlog (e.g.
   // after an outage) would otherwise publish dozens of TLS batches back-to-back,
@@ -166,6 +174,7 @@ static void doReport() {
 
     if (!mqtt::publish(TOPIC_DATA, buf, len, /*retained*/false)) {
       LOGW("report: publish failed, keeping %u records", (unsigned)n);
+      failed = true;
       break;                          // keep data; retry next cycle
     }
     ringbuf::popFront(n);             // confirmed sent -> safe to drop
@@ -174,6 +183,7 @@ static void doReport() {
     feedWatchdog();                   // long drains must not starve the task WDT
     mqtt::loop();                     // keep the MQTT session serviced meanwhile
   }
+  led::event(failed ? led::SEND_FAIL : led::SEND_OK, failed ? 2000 : 1500);
 }
 
 static void doHealth() {
@@ -197,6 +207,7 @@ static bool serviceLink() {
   float vbat = health::batteryVoltage();
   if (BATTERY_INSTALLED && vbat > 0.1f && vbat < LOW_BATTERY_SLEEP_V) {
     LOGW("low battery %.2fV -> deep sleep %ds", vbat, LOW_BATTERY_SLEEP_S);
+    led::set(led::LOWBAT);
     esp_sleep_enable_timer_wakeup((uint64_t)LOW_BATTERY_SLEEP_S * 1000000ULL);
     esp_deep_sleep_start();
   }
@@ -227,6 +238,16 @@ void loop() {
 
   bool linkUp = serviceLink();
   if (linkUp) mqtt::loop();          // service keepalive + inbound config/cmd
+
+  // Reflect link state on the status LED (base state; transient publish events
+  // from doReport briefly overlay it). Bench mode has no uplink -> OFFLINE.
+#if CELLULAR_ENABLED
+  if (linkUp)                       led::set(led::ONLINE);
+  else if (cellular::isConnected()) led::set(led::CONNECTING);
+  else                              led::set(led::OFFLINE);
+#else
+  led::set(led::OFFLINE);
+#endif
 
   ota::markHealthyIfDue();           // confirm a trial image once stable
 

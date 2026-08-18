@@ -88,13 +88,28 @@
 // (steady digital on/off — NOT PWM). The sensors are powered ONLY during a Modbus
 // read, so they can't self-heat from being always-on (they read true ambient
 // right after power-up). -1 = permanently powered (no switching).
-#define PIN_RS485_POWER       -1
+#define PIN_RS485_POWER       15
 // Gate polarity: true = driving the pin HIGH turns the sensors ON (typical low-
 // side N-MOSFET / HIGH-active driver module); false = active-low.
 #define RS485_POWER_ACTIVE_HIGH  true
 
-// Onboard status RGB LED (WS2812). -1 disables LED status.
+// Onboard status RGB LED (WS2812). -1 disables LED status. (The esp32s3 Arduino
+// variant defaults PIN_RGB_LED to 48; this board's addressable LED is on 38, so
+// override the variant's value. config.h is always included after Arduino.h.)
+#ifdef PIN_RGB_LED
+  #undef PIN_RGB_LED
+#endif
 #define PIN_RGB_LED           38
+// Status-LED behaviour (colour/pattern legend is documented in led.cpp).
+#define STATUS_LED_ENABLED    1
+#define STATUS_LED_BRIGHTNESS 40     // 0..255 master brightness (the WS2812 is bright)
+// Some boards wire the addressable LED in a byte order different from the WS2812
+// GRB that rgbLedWrite() assumes, which permutes colours (on this board green
+// showed as red -> R and G swapped). Set 0 if your colours come out correct.
+#define STATUS_LED_SWAP_RG    1
+// Brief power-on colour self-test: shows RED/GREEN/BLUE/WHITE (~0.5 s each) and
+// logs each colour name so you can confirm the mapping. Set 0 once it's correct.
+#define STATUS_LED_SELFTEST   1
 
 // Battery gauge: the board ships an 18650 holder + gauge IC. If a cell is
 // installed we report its voltage (spec §1, §8). Set to false if no cell.
@@ -122,13 +137,40 @@
 //  spec names as the likely part. VERIFY against your sensor's datasheet.
 #define RS485_BAUD            9600
 #define RS485_PARITY          SERIAL_8N1
-#define MODBUS_FUNC_READ      0x04   // read Input Registers (XY-MD02 style)
-#define MODBUS_REG_TEMP       0x0001 // input register holding temperature
-#define MODBUS_REG_HUMIDITY   0x0002 // input register holding humidity
-#define MODBUS_TEMP_SCALE     0.1f   // raw * scale = °C   (signed int16)
-#define MODBUS_HUM_SCALE      0.1f   // raw * scale = %RH
-#define MODBUS_ADDR_REGISTER  0x0101 // holding register storing the slave addr
+
+// Register numbering: this firmware speaks RELATIVE (0-based, on-the-wire)
+// register offsets — what ModbusMaster expects. Datasheets frequently quote
+// ABSOLUTE 3xxxx/4xxxx numbers instead; convert with the helpers below so you
+// can paste datasheet values directly and keep BOTH conventions documented:
+//   input   3xxxx (fn 0x04):    relative = 3xxxx - 30001  -> MB_INPUT(3xxxx)
+//   holding 4xxxx (fn 0x03/0x06): relative = 4xxxx - 40001 -> MB_HOLDING(4xxxx)
+#define MB_INPUT(abs)         ((uint16_t)((abs) - 30001))
+#define MB_HOLDING(abs)       ((uint16_t)((abs) - 40001))
+
+#define MODBUS_FUNC_READ      0x04              // read Input Registers (fn 0x04)
+// Values below are for the tested SHT20 unit (XY-MD02 class); the generic SHT40
+// transmitters on order should match, but VERIFY against their datasheet. Each
+// line shows the relative offset the firmware uses and the absolute datasheet #.
+#define MODBUS_REG_TEMP       MB_INPUT(30002)   // 0x0001  temperature (T  = raw/10)
+#define MODBUS_REG_HUMIDITY   MB_INPUT(30003)   // 0x0002  humidity    (RH = raw/10)
+#define MODBUS_TEMP_SCALE     0.1f              // raw * scale = °C   (signed int16)
+#define MODBUS_HUM_SCALE      0.1f              // raw * scale = %RH
+#define MODBUS_ADDR_REGISTER  MB_HOLDING(40258) // 0x0101  slave-address node reg
 #define MODBUS_TIMEOUT_MS     500
+// Many of these transmitters latch a newly-written Modbus address only after a
+// power cycle. When a switchable RS485 rail exists (PIN_RS485_POWER), the
+// addressing tool cycles it after writing and re-verifies at the new address.
+// Set 0 if your sensor adopts the address immediately and you want to skip that.
+#define MODBUS_ADDR_APPLY_POWERCYCLE  1
+// Write function for the address register: 0 = writeSingleRegister (fn 0x06, the
+// usual); 1 = writeMultipleRegisters (fn 0x10). Some modules only accept config
+// writes via 0x10. The addressing tool reads the register back after writing to
+// show whether the value actually stuck, so you can tell which one your unit needs.
+#define MODBUS_ADDR_WRITE_MULTI       0
+// After ACKing an address write, these sensors commit it to EEPROM asynchronously
+// over a few hundred ms. Removing power before that finishes aborts the save and
+// the address reverts — so wait this long after the write BEFORE any power cycle.
+#define MODBUS_ADDR_COMMIT_MS         1500
 // After switching the RS485 sensors on (PIN_RS485_POWER), wait this long for the
 // transmitters to boot and be ready to answer Modbus before reading. Tune to
 // your sensors (XY-MD02-class boot ~1s). Ignored if not power-switched.

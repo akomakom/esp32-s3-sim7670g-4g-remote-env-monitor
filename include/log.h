@@ -5,7 +5,7 @@
 
 inline void logInit() { Serial.begin(LOG_BAUD); }
 
-#define LOGE(fmt, ...) do { if (LOG_LEVEL >= 1) Serial.printf("[E] " fmt "\n", ##__VA_ARGS__); } while (0)
-#define LOGW(fmt, ...) do { if (LOG_LEVEL >= 2) Serial.printf("[W] " fmt "\n", ##__VA_ARGS__); } while (0)
-#define LOGI(fmt, ...) do { if (LOG_LEVEL >= 3) Serial.printf("[I] " fmt "\n", ##__VA_ARGS__); } while (0)
-#define LOGD(fmt, ...) do { if (LOG_LEVEL >= 4) Serial.printf("[D] " fmt "\n", ##__VA_ARGS__); } while (0)
+#define LOGE(fmt, ...) do { if (LOG_LEVEL >= 1) Serial.printf("[E] " fmt "\r\n", ##__VA_ARGS__); } while (0)
+#define LOGW(fmt, ...) do { if (LOG_LEVEL >= 2) Serial.printf("[W] " fmt "\r\n", ##__VA_ARGS__); } while (0)
+#define LOGI(fmt, ...) do { if (LOG_LEVEL >= 3) Serial.printf("[I] " fmt "\r\n", ##__VA_ARGS__); } while (0)
+#define LOGD(fmt, ...) do { if (LOG_LEVEL >= 4) Serial.printf("[D] " fmt "\r\n", ##__VA_ARGS__); } while (0)

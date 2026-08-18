@@ -149,41 +149,184 @@ void rs485PowerOff() { rs485PowerSet(false); }
 // -----------------------------------------------------------------------------
 //  RS485 provisioning tool (spec §2) — assign unique slave addresses one by one.
 // -----------------------------------------------------------------------------
-static uint16_t readLine(uint8_t deflt) {
-  while (!Serial.available()) delay(20);
-  String s = Serial.readStringUntil('\n');
+// Read one line of input, terminated by CR or LF (minicom sends CR on Enter,
+// others LF — accept either). Characters are echoed back since serial terminals
+// usually have local echo off, so the operator can see what they type. An empty
+// line returns `deflt`.
+static uint16_t readLine(uint16_t deflt) {
+  String s;
+  for (;;) {
+    while (!Serial.available()) delay(5);
+    char c = (char)Serial.read();
+    if (c == '\r' || c == '\n') break;             // Enter ends the line
+    if (c == 8 || c == 127) {                       // backspace / delete
+      if (s.length()) { s.remove(s.length() - 1); Serial.print(F("\b \b")); }
+      continue;
+    }
+    if (c < 32) continue;                           // ignore stray control bytes
+    s += c;
+    Serial.write(c);                                // echo the keystroke
+  }
+  Serial.print(F("\r\n"));
   s.trim();
   return s.length() ? (uint16_t)s.toInt() : deflt;
 }
 
+// Read one HOLDING register (fn 0x03). Used to read the slave-address register
+// back for persistence verification. Returns false if the sensor doesn't reply.
+static bool readHoldingReg(uint8_t addr, uint16_t reg, uint16_t& out) {
+  modbus.begin(addr, rs485);
+  if (modbus.readHoldingRegisters(reg, 1) != modbus.ku8MBSuccess) return false;
+  out = modbus.getResponseBuffer(0);
+  return true;
+}
+
+// Probe a sensor at `addr`: read temperature + humidity and print them so the
+// operator can confirm the bus is actually talking to a live sensor. Returns
+// true on any reply.
+static bool probeSensor(uint8_t addr) {
+  uint16_t rawT = 0, rawH = 0;
+  bool okT = readInputReg(addr, MODBUS_REG_TEMP, rawT);
+  bool okH = readInputReg(addr, MODBUS_REG_HUMIDITY, rawH);
+  if (okT && okH) {
+    Serial.printf("  addr %u LIVE:  T=%.1f C   RH=%.1f %%\r\n",
+                  addr, (int16_t)rawT * MODBUS_TEMP_SCALE, rawH * MODBUS_HUM_SCALE);
+    return true;
+  }
+  if (okT || okH) {
+    Serial.printf("  addr %u partial reply (T=%s, RH=%s) — check the register map\r\n",
+                  addr, okT ? "ok" : "fail", okH ? "ok" : "fail");
+    return true;
+  }
+  Serial.printf("  addr %u: NO REPLY — check wiring, power, and the current address\r\n", addr);
+  return false;
+}
+
+// Write `neu` to the address register at `cur` using Modbus function `fn`
+// (0x06 = write single, 0x10 = write multiple). Returns the Modbus rc.
+static uint8_t writeAddrReg(uint8_t cur, uint16_t neu, uint8_t fn) {
+  modbus.begin(cur, rs485);
+  if (fn == 0x10) {
+    modbus.setTransmitBuffer(0, neu);
+    return modbus.writeMultipleRegisters(MODBUS_ADDR_REGISTER, 1);
+  }
+  return modbus.writeSingleRegister(MODBUS_ADDR_REGISTER, neu);
+}
+
+// Power-cycle the RS485 rail (if switchable) so a written address can latch, and
+// warn if the rail doesn't actually remove the sensor's power.
+static void powerCycleSensor(uint8_t cur) {
+#if MODBUS_ADDR_APPLY_POWERCYCLE
+  if (PIN_RS485_POWER >= 0) {
+    rs485PowerOff();
+    delay(400);
+    uint16_t off;
+    if (readInputReg(cur, MODBUS_REG_TEMP, off))
+      Serial.println(F("    WARNING: sensor still responds with the rail OFF — it isn't losing power."));
+    delay(1200);
+    rs485PowerOn();          // includes the configured warm-up delay
+  } else {
+    Serial.println(F("    no RS485 power switch — cycle the sensor's power manually now."));
+    delay(500);
+  }
+#else
+  delay(300);
+#endif
+}
+
+// One address-change attempt with a given function code: write, show the
+// register read-back, power-cycle, then report whether the sensor now answers at
+// the new address. Returns true on success.
+// One address-change attempt: write `neu` to the address register — sent to
+// `writeAt` (normally `cur`, or 0 for a broadcast write some clones require),
+// wait for the EEPROM commit, power-cycle, and report whether the sensor now
+// answers at the new address.
+static bool tryAddrChange(uint8_t cur, uint16_t neu, uint8_t fn, uint8_t writeAt) {
+  Serial.printf("  attempt: write addr %u, fn 0x%02X, to %s ...\r\n",
+                neu, fn, writeAt == 0 ? "broadcast(0)" : "current addr");
+  uint8_t rc = writeAddrReg(writeAt, neu, fn);
+  if (writeAt != 0 && rc != modbus.ku8MBSuccess) {   // broadcast gets no reply -> don't require an ACK
+    Serial.printf("    write FAILED rc=0x%02X\r\n", rc);
+    return false;
+  }
+  // CRITICAL: give the sensor time to finish writing the address to EEPROM before
+  // we remove power — cutting power mid-commit makes it revert.
+  Serial.printf("    waiting %dms for EEPROM commit before power cycle...\r\n", MODBUS_ADDR_COMMIT_MS);
+  delay(MODBUS_ADDR_COMMIT_MS);
+  powerCycleSensor(cur);
+  return probeSensor(neu);
+}
+
 void runProvisioningTool() {
-  rs485PowerOn();   // keep the sensors energised for the interactive session
+  rs485PowerOn();   // keep the sensors energised for the whole interactive session
   Serial.println();
   Serial.println(F("=== RS485 SHT40 addressing tool ==="));
-  Serial.println(F("Connect ONE sensor at a time. It ships as address 01."));
-  Serial.printf ("Writing addr register 0x%04X, then verifying.\n", MODBUS_ADDR_REGISTER);
+  Serial.println(F("Connect ONE sensor at a time. Sensors typically ship as address 1."));
+  Serial.printf ("Address register 0x%04X. Enter 0 at the first prompt to quit.\r\n",
+                 MODBUS_ADDR_REGISTER);
 
   while (true) {
-    Serial.print(F("\nCurrent slave addr to talk to [1]: "));
-    uint8_t cur = readLine(1);
-    Serial.print(F("New unique addr to assign (1..247, 0=quit): "));
-    uint8_t neu = readLine(0);
-    if (neu == 0) { Serial.println(F("Done.")); return; }
-
-    modbus.begin(cur, rs485);
-    uint8_t rc = modbus.writeSingleRegister(MODBUS_ADDR_REGISTER, neu);
-    if (rc != modbus.ku8MBSuccess) {
-      Serial.printf("  write FAILED rc=0x%02X (check wiring/current addr)\n", rc);
-      continue;
+    Serial.println();
+    Serial.print(F("Current slave addr to talk to [1, 0=quit]: "));
+    uint16_t cur = readLine(1);
+    if (cur == 0) {
+      Serial.println(F("Done — reflash with PROVISIONING_MODE=false to deploy."));
+      return;
     }
-    delay(200);
-    // Verify by reading temperature at the NEW address.
-    uint16_t t;
-    if (readInputReg(neu, MODBUS_REG_TEMP, t)) {
-      Serial.printf("  OK: sensor now answers at addr %u (T raw=%u). ", neu, t);
-      Serial.println(F("Record this addr in config.h SENSORS[]."));
+
+    // 1) Confirm we can actually talk to this sensor BEFORE changing anything.
+    Serial.printf("Probing addr %u ...\r\n", cur);
+    if (!probeSensor((uint8_t)cur)) continue;       // no reply -> back to the top
+
+    // 2) Ask for the new address (blank = leave as-is and re-probe next round).
+    Serial.print(F("New unique addr to assign (1..247, blank=leave unchanged): "));
+    uint16_t neu = readLine(cur);
+    if (neu == cur)              { Serial.println(F("  unchanged.")); continue; }
+    if (neu < 1 || neu > 247)    { Serial.println(F("  out of range (1..247) — skipping.")); continue; }
+
+    // 3) Read the address register first so we know its value before the write.
+    uint16_t before = 0;
+    if (readHoldingReg((uint8_t)cur, MODBUS_ADDR_REGISTER, before))
+      Serial.printf("  addr register 0x%04X currently reads %u\r\n", MODBUS_ADDR_REGISTER, before);
+    else
+      Serial.printf("  NOTE: addr register 0x%04X not readable at addr %u — it may be the wrong\r\n"
+                    "  register for this model.\r\n", MODBUS_ADDR_REGISTER, cur);
+
+    // 4) Try the configured write function; if the sensor doesn't adopt the new
+    //    address, automatically fall back to the other. Common quirk on these
+    //    clones: fn 0x06 writes RAM only and reverts on power loss, so the
+    //    address only sticks when written with fn 0x10.
+    uint8_t first  = MODBUS_ADDR_WRITE_MULTI ? 0x10 : 0x06;
+    uint8_t second = MODBUS_ADDR_WRITE_MULTI ? 0x06 : 0x10;
+    bool ok = tryAddrChange((uint8_t)cur, neu, first, (uint8_t)cur);
+    if (!ok && probeSensor((uint8_t)cur)) {
+      Serial.println(F("  that didn't take — retrying with the other write function..."));
+      ok = tryAddrChange((uint8_t)cur, neu, second, (uint8_t)cur);
+    }
+    if (!ok && probeSensor((uint8_t)cur)) {
+      Serial.println(F("  still no — last resort: broadcast write (some clones only accept addr 0)..."));
+      ok = tryAddrChange((uint8_t)cur, neu, 0x06, 0);
+    }
+
+    // 5) Report the outcome.
+    if (ok) {
+      uint16_t stored = 0;
+      if (readHoldingReg((uint8_t)neu, MODBUS_ADDR_REGISTER, stored) && stored == neu)
+        Serial.printf("  persisted OK: address register reads %u at the new address.\r\n", stored);
+      Serial.printf("  DONE: sensor is live at addr %u. Record it in config.h SENSORS[].\r\n", neu);
+    } else if (probeSensor((uint8_t)cur)) {
+      uint16_t regNow = 0;
+      bool regOk = readHoldingReg((uint8_t)cur, MODBUS_ADDR_REGISTER, regNow);
+      Serial.printf("  address did NOT change — still live at %u after fn 0x06, 0x10 and broadcast.\r\n", cur);
+      if (regOk && regNow == neu)
+        Serial.println(F("  The register holds the new value but the sensor won't act on it."));
+      else if (regOk)
+        Serial.printf("  The register reverted to %u — the write isn't being saved to NVM.\r\n", regNow);
+      Serial.println(F("  Our frame matches the XY-MD02/SHT20 datasheet exactly, so this unit likely has\r\n"
+                       "  a firmware quirk. Cross-check with a PC Modbus tool (mbpoll); meanwhile just\r\n"
+                       "  leave it at addr 1 — the firmware supports per-sensor addresses in SENSORS[]."));
     } else {
-      Serial.printf("  wrote addr %u but no reply — verify power/wiring.\n", neu);
+      Serial.println(F("  no reply at new OR old address — check power/wiring, then re-probe."));
     }
   }
 }
