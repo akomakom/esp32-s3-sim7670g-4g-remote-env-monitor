@@ -29,7 +29,18 @@
 // -----------------------------------------------------------------------------
 //  0.  BUILD / IDENTITY
 // -----------------------------------------------------------------------------
-#define FW_VERSION            "1.0.3"          // reported in health telemetry
+#define FW_VERSION            "1.0.3"          // version PREFIX; bump this by hand
+// The build appends the current git short hash to the reported version. The
+// pre-build script (git_rev.py, via platformio.ini extra_scripts) regenerates
+// include/git_rev.h with GIT_REV each build; __has_include keeps non-PlatformIO
+// builds (IDE indexers etc.) compiling with a "nogit" fallback.
+#if __has_include("git_rev.h")
+  #include "git_rev.h"
+#endif
+#ifndef GIT_REV
+  #define GIT_REV             "nogit"
+#endif
+#define FW_VERSION_FULL       FW_VERSION "+" GIT_REV   // e.g. "1.0.3+9517564-dirty"
 #ifndef DEVICE_ID
   #define DEVICE_ID           "rental-mon-01"  // unique per unit; used in topics
 #endif
@@ -156,7 +167,14 @@
 #define MODBUS_TEMP_SCALE     0.1f              // raw * scale = °C   (signed int16)
 #define MODBUS_HUM_SCALE      0.1f              // raw * scale = %RH
 #define MODBUS_ADDR_REGISTER  MB_HOLDING(40258) // 0x0101  slave-address node reg
-#define MODBUS_TIMEOUT_MS     500
+#define MODBUS_TIMEOUT_MS     500     // NOTE: informational only — ModbusMaster hardcodes
+                                      // a 2000 ms response timeout (ku16MBResponseTimeout).
+// Bus robustness: Modbus RTU requires a quiet gap between frames (>=3.5 char times,
+// ~3.6 ms @ 9600), and auto-direction RS485 transceivers need a moment to turn
+// around. Space each transaction and retry transient failures so back-to-back
+// polling of several sensors doesn't drop frames.
+#define MODBUS_INTERFRAME_MS  10      // quiet gap before each transaction
+#define MODBUS_READ_RETRIES   2       // extra attempts on a failed read
 // Many of these transmitters latch a newly-written Modbus address only after a
 // power cycle. When a switchable RS485 rail exists (PIN_RS485_POWER), the
 // addressing tool cycles it after writing and re-verifies at the new address.
@@ -320,11 +338,23 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #define MAX_REPORT_BATCHES_PER_CYCLE 50
 
 // -----------------------------------------------------------------------------
-//  6.  FLASH RING BUFFER  (spec §6 — survive multi-day outages)
+//  6.  BUFFER  (spec §6 — survive outages)  — RAM-primary, flash as insurance
 // -----------------------------------------------------------------------------
-#define BUFFER_FILE_PATH      "/buffer.bin"
-#define BUFFER_MAX_RECORDS    20000   // ~ several days of 5 sensors @ 5 min
+//  Readings live in a RAM ring buffer and are published from there; flash is
+//  touched ONLY as outage insurance. While the link is healthy readings are sent
+//  within a report cycle and never hit flash. Only if data stays UNSENT longer
+//  than BUFFER_FLASH_INTERVAL_S (an outage) is the buffer snapshotted to flash,
+//  and then at most once per interval. So a reboot mid-outage loses at most that
+//  interval of readings, and flash writes drop from ~thousands/day to ~1 per
+//  hour-of-outage (Home Assistant can't backfill history anyway — the authoritative
+//  timestamped record is the server-side store, see docs).
+#define BUFFER_SNAPSHOT_PATH  "/buffer.snap" // wholesale RAM snapshot (rare writes)
+#define BUFFER_FILE_PATH      "/buffer.bin"  // legacy files removed on first boot
+#define BUFFER_MAX_RECORDS    2000    // RAM capacity (×~28 B ≈ 56 KB internal heap; the
+                                      // buffer prefers PSRAM, but SPIRAM is not enabled
+                                      // in sdkconfig — enable it to raise this safely)
 #define BUFFER_DROP_OLDEST    true    // when full, drop oldest (keep recent)
+#define BUFFER_FLASH_INTERVAL_S  3600 // persist unsent data at most this often (outage)
 
 // -----------------------------------------------------------------------------
 //  7.  RELIABILITY  (spec §6)

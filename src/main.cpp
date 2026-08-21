@@ -67,7 +67,7 @@ static void onReportNow() {
 // -----------------------------------------------------------------------------
 void setup() {
   logInit();
-  LOGI("=== Rental Monitor %s booting (%s) ===", FW_VERSION, DEVICE_ID);
+  LOGI("=== Rental Monitor %s booting (%s) ===", FW_VERSION_FULL, DEVICE_ID);
   led::begin();
   led::set(led::BOOT);
 
@@ -135,11 +135,20 @@ static void doSample() {
   int ok = 0;
   for (uint8_t i = 0; i < SENSOR_COUNT; i++) {
     if (i < 16 && !cfg.sensor_enabled[i]) continue;
+    uint32_t t0 = millis();
     Reading r = sensors::read(i);
-    if (!r.valid) continue;
-    r.ts = ts;                        // capture-time timestamp (backdated later)
-    ringbuf::push(r);                 // persisted BEFORE any network attempt
-    ok++;
+    uint32_t t_read = millis() - t0;
+    uint32_t t_store = 0;
+    if (r.valid) {
+      r.ts = ts;                      // capture-time timestamp (backdated later)
+      uint32_t t1 = millis();
+      ringbuf::push(r);               // persisted BEFORE any network attempt
+      t_store = millis() - t1;
+      ok++;
+    }
+    // read vs store timing pinpoints where a slow cycle goes (Modbus vs LittleFS).
+    LOGD("sensor %u: read=%lums store=%lums", i, (unsigned long)t_read, (unsigned long)t_store);
+    feedWatchdog();                   // slow reads / flash writes must not starve the WDT
   }
 
   if (any_rs485) sensors::rs485PowerOff();
@@ -207,6 +216,7 @@ static bool serviceLink() {
   float vbat = health::batteryVoltage();
   if (BATTERY_INSTALLED && vbat > 0.1f && vbat < LOW_BATTERY_SLEEP_V) {
     LOGW("low battery %.2fV -> deep sleep %ds", vbat, LOW_BATTERY_SLEEP_S);
+    ringbuf::flushNow();              // RAM is lost across deep sleep -> persist first
     led::set(led::LOWBAT);
     esp_sleep_enable_timer_wakeup((uint64_t)LOW_BATTERY_SLEEP_S * 1000000ULL);
     esp_deep_sleep_start();
@@ -266,6 +276,8 @@ void loop() {
     if (linkUp) doHealth();
     g_next_health_ms = now + cfg.report_interval_s * 1000UL;
   }
+
+  ringbuf::maintain();                // rate-limited flash snapshot (outage insurance)
 
   delay(50);                          // yield; keeps CPU + data usage low
 }

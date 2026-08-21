@@ -1,20 +1,24 @@
-// Persistent flash ring buffer for unsent readings (spec §6).
+// RAM-primary buffer for unsent readings, with flash as outage insurance (spec §6).
 //
-// Design goals: no data loss across reboot, survive multi-day outages, and
-// flush backdated when the link returns. We store fixed-size records in a
-// LittleFS file with a small header (head/tail/count). Fixed record size keeps
-// indexing O(1) and avoids fragmentation; a corrupt file re-initialises to
-// empty rather than bricking (spec §6 "boot resilience").
+// Readings live in a RAM ring buffer (fast, no flash wear) and are published from
+// there. Flash is written only occasionally: if data stays UNSENT longer than
+// BUFFER_FLASH_INTERVAL_S (i.e. an outage), maintain() snapshots the buffer to a
+// LittleFS file, at most once per interval, and clears it once everything drains.
+// A reboot mid-outage restores the last snapshot (losing at most one interval).
+// This trades strict per-reading durability (not required) for ~1000x fewer flash
+// writes. A corrupt/missing snapshot restores empty rather than bricking.
 #pragma once
 #include "reading.h"
 
 namespace ringbuf {
 
-bool   begin();                 // mounts LittleFS, opens/creates the buffer
-bool   push(const Reading& r);  // append; drops oldest if full (per config)
-size_t count();                 // records currently buffered
+bool   begin();                 // mount FS, allocate RAM buffer, restore snapshot
+bool   push(const Reading& r);  // append to RAM; drops oldest if full (per config)
+size_t count();                 // records currently buffered (in RAM)
 bool   peek(size_t n, Reading& out); // read the n-th oldest without removing
 void   popFront(size_t n);      // drop the n oldest (after a confirmed publish)
 void   clear();
+void   maintain();              // call periodically from loop(): rate-limited flash snapshot
+void   flushNow();              // force a snapshot now (e.g. before deep sleep)
 
 } // namespace ringbuf

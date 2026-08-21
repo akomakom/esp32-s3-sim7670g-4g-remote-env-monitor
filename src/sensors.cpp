@@ -83,16 +83,18 @@ static Reading readI2C(uint8_t idx) {
 }
 
 static bool readInputReg(uint8_t addr, uint16_t reg, uint16_t& out) {
-  modbus.begin(addr, rs485);
-  uint8_t rc = (MODBUS_FUNC_READ == 0x04)
-                 ? modbus.readInputRegisters(reg, 1)
-                 : modbus.readHoldingRegisters(reg, 1);
-  if (rc != modbus.ku8MBSuccess) {
-    LOGW("Modbus addr %u reg 0x%04X failed rc=0x%02X", addr, reg, rc);
-    return false;
+  for (uint8_t attempt = 0; attempt <= MODBUS_READ_RETRIES; attempt++) {
+    delay(MODBUS_INTERFRAME_MS);     // inter-frame quiet gap + transceiver turnaround
+    modbus.begin(addr, rs485);
+    uint8_t rc = (MODBUS_FUNC_READ == 0x04)
+                   ? modbus.readInputRegisters(reg, 1)
+                   : modbus.readHoldingRegisters(reg, 1);
+    if (rc == modbus.ku8MBSuccess) { out = modbus.getResponseBuffer(0); return true; }
+    if (attempt == MODBUS_READ_RETRIES)
+      LOGW("Modbus addr %u reg 0x%04X failed rc=0x%02X (after %u tries)",
+           addr, reg, rc, (unsigned)(attempt + 1));
   }
-  out = modbus.getResponseBuffer(0);
-  return true;
+  return false;
 }
 
 static Reading readModbus(uint8_t idx, uint8_t addr) {

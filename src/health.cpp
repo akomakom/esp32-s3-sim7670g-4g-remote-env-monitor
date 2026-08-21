@@ -46,7 +46,7 @@ size_t buildJson(char* out, size_t cap) {
     "\"heap\":%u,\"rssi\":%d,\"op\":\"%s\",\"vbat\":%.2f,"
     "\"mains\":%s,\"rst\":\"%s\",\"buf\":%u,\"tx\":%u,\"rx\":%u,"
     "\"sample_s\":%u,\"report_s\":%u}",
-    FW_VERSION,
+    FW_VERSION_FULL,
     timesync::nowUtc(),
     (uint32_t)(millis() / 1000),
     (uint32_t)ESP.getFreeHeap(),

@@ -10,6 +10,9 @@ include/secrets/secrets.h
 # reproducible component versions.
 sdkconfig.rental_monitor
 managed_components/
+
+# Generated each build by git_rev.py (holds the git short hash for FW_VERSION).
+include/git_rev.h
 .dummy/
 CMakeLists.txt
 src/CMakeLists.txt
