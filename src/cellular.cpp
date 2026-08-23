@@ -87,6 +87,26 @@ static void refreshSignal() {
     strncpy(g_oper, op, sizeof(g_oper) - 1);   // only overwrite on a non-empty read
 }
 
+// Software modem-power control (Waveshare "4G" DIP OFF + GPIO gates VBAT). No-op
+// when PIN_MODEM_POWER < 0 (module powered by the DIP switch).
+static void modemPowerSet(bool on) {
+  if (PIN_MODEM_POWER < 0) return;
+  pinMode(PIN_MODEM_POWER, OUTPUT);
+  bool level = MODEM_POWER_ACTIVE_HIGH ? on : !on;
+  digitalWrite(PIN_MODEM_POWER, level ? HIGH : LOW);
+}
+
+// Hard power-cycle the module to recover a wedged USB link (cdc_acm TX timeouts
+// don't report DEVICE_GONE, so the esp_modem object alone can't recover it).
+static void modemPowerCycle() {
+  if (PIN_MODEM_POWER < 0) return;
+  LOGW("cellular: power-cycling modem via GPIO%d", PIN_MODEM_POWER);
+  modemPowerSet(false);
+  delay(2000);                         // let VBAT fully collapse so the module resets
+  modemPowerSet(true);
+  delay(MODEM_POWER_BOOT_MS);          // SIM7670G auto-boots on VBAT; give it a moment
+}
+
 static bool createModem() {
   if (!s_ppp_netif) {
     esp_netif_config_t cfg = ESP_NETIF_DEFAULT_PPP();
@@ -133,6 +153,12 @@ void begin() {
   esp_event_loop_create_default();     // returns INVALID_STATE if already up — ok
   esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &onIpEvent, nullptr);
 
+  if (PIN_MODEM_POWER >= 0) {          // software power control -> boot the module
+    LOGI("cellular: powering modem on via GPIO%d (4G DIP should be OFF)", PIN_MODEM_POWER);
+    modemPowerSet(true);
+    delay(MODEM_POWER_BOOT_MS);
+  }
+
   if (!createModem()) return;          // loop()/ensureConnected() will retry
   LOGI("cellular: dialing PPP over USB...");
   dial();
@@ -143,17 +169,29 @@ bool isConnected() { return g_up; }
 bool ensureConnected() {
   if (g_up) return true;
 
+  static uint8_t s_fails = 0;          // consecutive dial failures
+
   if (g_usb_gone || !s_dce) {          // USB dropped -> rebuild the modem object
     LOGW("cellular: (re)opening USB modem");
     if (s_dce) { esp_modem_destroy(s_dce); s_dce = nullptr; }
-    if (!createModem()) return false;
+    if (!createModem()) { s_fails++; return false; }
+  } else if (PIN_MODEM_POWER >= 0 && s_fails >= MODEM_RECOVER_AFTER_FAILS) {
+    // USB wedged but "present" (TX transfer timeouts never fire the DEVICE_GONE
+    // callback), so re-dialing loops forever. Hard power-cycle and rebuild.
+    LOGW("cellular: %u dial fails -> hard power-cycle + re-open", (unsigned)s_fails);
+    esp_modem_destroy(s_dce); s_dce = nullptr;
+    modemPowerCycle();
+    if (!createModem()) { s_fails++; return false; }
   } else {
     LOGW("cellular: re-dialing PPP");
     esp_modem_set_mode(s_dce, ESP_MODEM_MODE_COMMAND);  // best-effort back to cmd
     delay(1000);
     refreshSignal();   // command mode now -> re-measure signal before re-dialing
   }
-  return dial();
+
+  bool ok = dial();
+  s_fails = ok ? 0 : (uint8_t)(s_fails + 1);
+  return ok;
 }
 
 void loop() {

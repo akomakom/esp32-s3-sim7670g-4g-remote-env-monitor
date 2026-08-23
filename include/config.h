@@ -82,6 +82,32 @@
 #define PIN_MODEM_DTR         -1   // not wired to a usable GPIO on this board
 #define MODEM_BAUD            115200
 
+// Optional SOFTWARE power control for the SIM7670G. Per Waveshare's FAQ, with the
+// "4G" DIP switch OFF a GPIO gates module power (HIGH = on, LOW = off). This lets
+// the firmware POWER-CYCLE the modem to recover a wedged USB link (cdc_acm TX
+// timeouts), and bypasses the mechanically flaky 4G DIP contact.
+//   -1  = powered by the DIP switch, no software control (default; unchanged).
+//   33  = Waveshare's documented pin for this board. VERIFY on your unit: set the
+//         4G DIP OFF and confirm the modem powers up. CAVEATS: the FAQ's "GPIO22"
+//         alternative does NOT exist on the ESP32-S3; and GPIO33 is the octal-PSRAM
+//         data line, so this REQUIRES PSRAM to stay disabled (it is) and is
+//         mutually exclusive with enabling SPIRAM.
+#define PIN_MODEM_POWER          -1     // set to 33 to enable software power control
+#define MODEM_POWER_ACTIVE_HIGH  true
+#define MODEM_POWER_BOOT_MS      3000   // settle time after powering the module on
+#define MODEM_RECOVER_AFTER_FAILS 3     // consecutive dial fails -> GPIO power-cycle
+// Last-resort recovery that needs NO DIP access: if the link stays down this long,
+// reboot to reset the ESP32-S3 USB-host stack (empirically what clears a wedged
+// cdc_acm modem link). The RAM buffer is flushed to flash first. 0 = disabled.
+#define MODEM_REBOOT_AFTER_S     3600   // reboot after this long continuously offline
+// Shorter threshold until the FIRST successful connect since boot. A cold power-on
+// boots the ESP32 and modem at once and can lose the USB enumeration race (a wedge
+// a re-dial can't clear — but a flash clears it). Rebooting then acts like a flash:
+// warm modem + fresh USB host -> it connects. Keep this comfortably longer than a
+// healthy cold boot (modem registration ~80 s + PPP dial) so a slow-but-OK boot is
+// never rebooted. 0 = use MODEM_REBOOT_AFTER_S even before the first connect.
+#define MODEM_FIRST_CONNECT_REBOOT_S  300
+
 // I2C bus for the local (crawlspace) SHT40. Pick a free SDA/SCL pair.
 #define PIN_I2C_SDA           5
 #define PIN_I2C_SCL           4

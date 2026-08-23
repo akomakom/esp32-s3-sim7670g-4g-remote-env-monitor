@@ -13,6 +13,7 @@
 // =============================================================================
 #include <Arduino.h>
 #include <esp_task_wdt.h>
+#include <esp_system.h>               // esp_restart() for the offline-reboot watchdog
 
 #include "config.h"
 #include "log.h"
@@ -35,8 +36,10 @@ static uint32_t g_next_report_ms = 0;
 static uint32_t g_next_health_ms = 0;
 
 // ---- link backoff state (spec §6) ----
-static uint32_t g_backoff_s   = RECONNECT_BACKOFF_MIN_S;
-static uint32_t g_retry_at_ms = 0;
+static uint32_t g_backoff_s        = RECONNECT_BACKOFF_MIN_S;
+static uint32_t g_retry_at_ms      = 0;
+static uint32_t g_last_link_up_ms  = 0;   // for the offline-reboot watchdog
+static bool     g_ever_up          = false; // have we connected at all since boot?
 
 // Whether the BOOT button is held at reset -> force provisioning mode.
 static bool bootButtonHeld() {
@@ -115,6 +118,7 @@ void setup() {
   g_next_sample_ms = now;                                    // sample immediately
   g_next_report_ms = now + rconfig::get().report_interval_s * 1000UL;
   g_next_health_ms = now + 15000;                            // first health soon
+  g_last_link_up_ms = now;                                   // don't reboot before we've had a chance
   LOGI("setup complete");
 }
 
@@ -247,7 +251,24 @@ void loop() {
   espnow_tub::loop();                 // advance hot tub channel search / pairing
 
   bool linkUp = serviceLink();
-  if (linkUp) mqtt::loop();          // service keepalive + inbound config/cmd
+  if (linkUp) {
+    g_last_link_up_ms = millis();    // healthy -> reset the offline-reboot watchdog
+    g_ever_up = true;
+    mqtt::loop();                    // service keepalive + inbound config/cmd
+  } else {
+    // Rebooting resets the ESP32-S3 USB-host stack and clears a wedged modem
+    // (cdc_acm TX timeouts) — same effect as a flash: warm modem + fresh host.
+    // Use a SHORT threshold until the first connect (cold-boot USB enum race),
+    // then the longer outage threshold once we've proven the link works.
+    uint32_t limit_s = g_ever_up ? MODEM_REBOOT_AFTER_S : MODEM_FIRST_CONNECT_REBOOT_S;
+    if (limit_s > 0 && (millis() - g_last_link_up_ms) > limit_s * 1000UL) {
+      LOGE("cellular: unreachable > %us (%s) -> flush buffer + reboot to reset USB host",
+           (unsigned)limit_s, g_ever_up ? "outage" : "cold-boot enum race");
+      ringbuf::flushNow();
+      delay(100);
+      esp_restart();
+    }
+  }
 
   // Reflect link state on the status LED (base state; transient publish events
   // from doReport briefly overlay it). Bench mode has no uplink -> OFFLINE.
