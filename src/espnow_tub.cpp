@@ -15,6 +15,7 @@ void begin() {}
 void loop() {}
 bool latestWaterTempC(float&, uint32_t) { return false; }
 bool isPaired() { return false; }
+int  rssi(uint32_t) { return 0; }
 #else
 
 // ---- shared state (written from the ESP-NOW recv task, read from loop) -------
@@ -22,6 +23,9 @@ static portMUX_TYPE   s_mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile float s_water_temp_f   = NAN;   // last value, as received (°F)
 static volatile uint32_t s_last_recv_ms = 0;    // millis() of last SERVER_STATUS
 static volatile bool  s_have_reading   = false;
+static volatile int   s_rssi           = 0;     // RSSI (dBm) of the last packet heard
+static volatile uint32_t s_rssi_ms     = 0;     // millis() of that packet
+static volatile bool  s_have_rssi      = false;
 
 // ---- pairing / channel-search state (main-loop owned, except where noted) ----
 static bool           s_enabled_runtime = false; // begin() succeeded at least once
@@ -63,6 +67,17 @@ static bool ensurePeer(const uint8_t* mac, uint8_t chan) {
 // temp) and the PAIRING reply that tells us the controller's channel.
 static void onDataRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
   if (len < 1) return;
+
+  // Capture RSSI for EVERY packet from the controller — including pairing replies
+  // — so we get a link-quality read even when two-way pairing isn't completing.
+  if (info && info->rx_ctrl) {
+    portENTER_CRITICAL(&s_mux);
+    s_rssi = info->rx_ctrl->rssi;
+    s_rssi_ms = millis();
+    s_have_rssi = true;
+    portEXIT_CRITICAL(&s_mux);
+  }
+
   const uint8_t type = data[0];
 
   switch (type) {
@@ -122,6 +137,8 @@ static bool initRadio() {
   WiFi.setAutoReconnect(false);
   WiFi.disconnect(false, false);
   esp_wifi_set_ps(WIFI_PS_NONE);
+  esp_wifi_set_max_tx_power(84);       // ~20 dBm — helps the TX (pairing) direction;
+                                       // note it does NOT affect our RX of the tub.
 
   if (esp_now_init() != ESP_OK) {
     LOGW("espnow: esp_now_init failed");
@@ -145,8 +162,24 @@ static bool initRadio() {
 }
 
 // -----------------------------------------------------------------------------
+// One-shot WiFi AP scan logged to serial. Compare the strongest AP's RSSI here to
+// a phone at the same spot: if the board reads ~tens of dB weaker, its WiFi RX
+// path is impaired (rules coexistence/ESP-NOW issues in or out).
+static void wifiScanDiag() {
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(false, false);
+  int n = WiFi.scanNetworks();
+  LOGI("espnow: WiFi scan = %d APs (compare strongest RSSI to a phone here):", n);
+  for (int i = 0; i < n && i < 8; i++)
+    LOGI("  %-24s ch%-2d %d dBm", WiFi.SSID(i).c_str(), WiFi.channel(i), (int)WiFi.RSSI(i));
+  WiFi.scanDelete();
+}
+
 void begin() {
   s_enabled_runtime = true;
+#if HOTTUB_WIFI_SCAN_DIAG
+  wifiScanDiag();
+#endif
   s_esp_now_ready   = initRadio();
   if (!s_esp_now_ready) s_retry_begin_ms = millis() + 5000; // retry from loop()
 }
@@ -162,6 +195,19 @@ void loop() {
       if (!s_esp_now_ready) s_retry_begin_ms = millis() + 5000;
     }
     return;
+  }
+
+  // Live tub RSSI to serial (every 3 s) so it's visible even with cellular — and
+  // thus MQTT health — disabled, for range/coexistence testing.
+  static uint32_t s_rssi_log_ms = 0;
+  if (millis() - s_rssi_log_ms > 3000) {
+    s_rssi_log_ms = millis();
+    int r; bool have; uint32_t rms;
+    portENTER_CRITICAL(&s_mux);
+    r = s_rssi; have = s_have_rssi; rms = s_rssi_ms;
+    portEXIT_CRITICAL(&s_mux);
+    if (have && (millis() - rms) < 5000) LOGI("espnow: tub RSSI %d dBm", r);
+    else                                 LOGI("espnow: tub RSSI --- (no packet <5s)");
   }
 
   // Read the small bits of state the recv callback may have changed.
@@ -249,6 +295,20 @@ bool isPaired() {
   bool paired = (s_status == PAIR_PAIRED);
   portEXIT_CRITICAL(&s_mux);
   return paired;
+}
+
+// -----------------------------------------------------------------------------
+// RSSI (dBm) of the most recent packet heard from the controller, or 0 if none
+// within max_age_ms. Updated on ANY received packet (incl. pairing replies), so
+// it reflects link quality even while two-way pairing is still failing.
+int rssi(uint32_t max_age_ms) {
+  if (!s_enabled_runtime) return 0;
+  int r; uint32_t last; bool have;
+  portENTER_CRITICAL(&s_mux);
+  r = s_rssi; last = s_rssi_ms; have = s_have_rssi;
+  portEXIT_CRITICAL(&s_mux);
+  if (!have || (millis() - last) > max_age_ms) return 0;
+  return r;
 }
 
 #endif // HOTTUB_ESPNOW_ENABLED

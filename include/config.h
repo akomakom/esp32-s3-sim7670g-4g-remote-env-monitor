@@ -237,6 +237,12 @@
 #define HOTTUB_MAX_CHANNEL        11
 // How long to dwell on each channel waiting for a pairing reply before hopping.
 #define HOTTUB_CHANNEL_DWELL_MS   250
+// Diagnostics: at boot, scan for WiFi APs and log their RSSI. Compare the
+// strongest AP's RSSI here to what a phone reads at the same spot — if the board
+// is ~tens of dB weaker, its WiFi RX/antenna path is impaired (vs. an ESP-NOW-only
+// or coexistence issue). Also, espnow loop() logs the live tub RSSI to serial so
+// it's visible even with cellular (and thus MQTT health) disabled. Set 0 when done.
+#define HOTTUB_WIFI_SCAN_DIAG     1
 // If no controller message arrives within this window, assume it moved/restarted
 // and restart the channel search.
 #define HOTTUB_MESSAGE_MAX_AGE_MS 60000UL

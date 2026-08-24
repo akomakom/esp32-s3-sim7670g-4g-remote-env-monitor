@@ -41,4 +41,9 @@ bool latestWaterTempC(float& out_c, uint32_t max_age_ms);
 // (health/logging); receiving data does not strictly require this to stay true.
 bool isPaired();
 
+// RSSI (dBm, negative) of the most recently heard controller packet, or 0 if none
+// within max_age_ms. Captured on any received packet — even pairing replies — so
+// it's a useful link-quality metric even when two-way pairing keeps failing.
+int  rssi(uint32_t max_age_ms);
+
 } // namespace espnow_tub

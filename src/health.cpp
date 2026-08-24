@@ -5,6 +5,7 @@
 #include "timesync.h"
 #include "ring_buffer.h"
 #include "runtime_config.h"
+#include "espnow_tub.h"
 #include <esp_system.h>
 
 namespace health {
@@ -45,7 +46,7 @@ size_t buildJson(char* out, size_t cap) {
     "{\"online\":true,\"fw\":\"%s\",\"ts\":%u,\"up\":%u,"
     "\"heap\":%u,\"rssi\":%d,\"op\":\"%s\",\"vbat\":%.2f,"
     "\"mains\":%s,\"rst\":\"%s\",\"buf\":%u,\"tx\":%u,\"rx\":%u,"
-    "\"sample_s\":%u,\"report_s\":%u}",
+    "\"sample_s\":%u,\"report_s\":%u,\"tub_rssi\":%d}",
     FW_VERSION_FULL,
     timesync::nowUtc(),
     (uint32_t)(millis() / 1000),
@@ -59,7 +60,8 @@ size_t buildJson(char* out, size_t cap) {
     mqtt::bytesSentToday(),
     mqtt::bytesRecvToday(),
     rconfig::get().sample_interval_s,
-    rconfig::get().report_interval_s);
+    rconfig::get().report_interval_s,
+    espnow_tub::rssi(300000));   // dBm of last tub packet within 5 min (0 = not heard)
 }
 
 } // namespace health

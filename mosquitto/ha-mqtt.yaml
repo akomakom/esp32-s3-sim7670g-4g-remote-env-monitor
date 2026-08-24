@@ -419,6 +419,25 @@ sensor:
         payload_available: "online"
         payload_not_available: "offline"
 
+  - name: "Rental Monitor Hot Tub Signal"
+    unique_id: rentalmon_tub_rssi
+    state_topic: "rental/rental-mon-01/health"
+    # 0 = no ESP-NOW packet heard from the controller in the last 5 min -> unknown.
+    value_template: "{{ value_json.tub_rssi if value_json.tub_rssi not in (0, none) else none }}"
+    unit_of_measurement: "dBm"
+    device_class: signal_strength
+    state_class: measurement
+    entity_category: diagnostic
+    device:
+      suggested_area: "Rental"
+      name: "Rental Monitor"
+      identifiers: "rental_mon_01"
+    availability:
+      - topic: "rental/rental-mon-01/health"
+        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+        payload_available: "online"
+        payload_not_available: "offline"
+
   - name: "Rental Monitor Free Heap"
     unique_id: rentalmon_heap
     state_topic: "rental/rental-mon-01/health"

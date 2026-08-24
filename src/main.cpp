@@ -201,7 +201,7 @@ static void doReport() {
 
 static void doHealth() {
   if (!mqtt::isConnected()) return;
-  char js[320];
+  char js[384];
   size_t n = health::buildJson(js, sizeof(js));
   mqtt::publish(TOPIC_HEALTH, (const uint8_t*)js, n, /*retained*/false);
 }
