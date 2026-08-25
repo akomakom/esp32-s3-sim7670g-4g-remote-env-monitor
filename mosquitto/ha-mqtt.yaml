@@ -400,6 +400,26 @@ sensor:
         payload_available: "online"
         payload_not_available: "offline"
 
+  # ---- water pipe (DS18B20, temp-only) ----
+  - name: "Rental Water Pipe Temperature"
+    unique_id: rentalmon_pipe_c
+    state_topic: "rental/rental-mon-01/sensor/pipe"
+    value_template: "{{ value_json.c | default(None) }}"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    suggested_display_precision: 1
+    expire_after: 1800
+    device:
+      suggested_area: "Rental"
+      name: "Rental Monitor"
+      identifiers: "rental_mon_01"
+    availability:
+      - topic: "rental/rental-mon-01/health"
+        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+        payload_available: "online"
+        payload_not_available: "offline"
+
   # ---- health / diagnostics ----
   - name: "Rental Monitor Cell Signal"
     unique_id: rentalmon_rssi
@@ -548,6 +568,23 @@ sensor:
     unique_id: rentalmon_operator
     state_topic: "rental/rental-mon-01/health"
     value_template: "{{ value_json.op }}"
+    entity_category: diagnostic
+    device:
+      suggested_area: "Rental"
+      name: "Rental Monitor"
+      identifiers: "rental_mon_01"
+    availability:
+      - topic: "rental/rental-mon-01/health"
+        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+        payload_available: "online"
+        payload_not_available: "offline"
+
+  - name: "Rental Monitor IP"
+    unique_id: rentalmon_ip
+    state_topic: "rental/rental-mon-01/health"
+    # PPP-assigned cellular IP; blank when the link is down -> unknown.
+    value_template: "{{ value_json.ip if value_json.ip else none }}"
+    icon: "mdi:ip-network"
     entity_category: diagnostic
     device:
       suggested_area: "Rental"

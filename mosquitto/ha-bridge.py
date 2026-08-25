@@ -44,7 +44,7 @@ KEY  = os.environ.get("MQTT_KEY",  "certs/client.key")
 DATA_SUB = os.environ.get("MQTT_DATA_SUB", "rental/+/data")
 
 # sensor index -> key. Keep in sync with config.h SENSORS[] (and decode_payload.py).
-KEYS = ["crawl", "return", "supply", "outdoor", "garage", "tub"]
+KEYS = ["crawl", "return", "supply", "outdoor", "garage", "tub", "pipe"]
 # short wire key -> which fields to forward (others are omitted when NaN/absent)
 FIELDS = ("t", "c", "h", "p", "a")
 

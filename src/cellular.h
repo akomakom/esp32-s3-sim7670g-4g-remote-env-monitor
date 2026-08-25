@@ -12,5 +12,6 @@ void loop();           // service link-state events
 
 int  signalRSRP();     // last known signal in dBm (0 if unknown) — for health
 const char* operatorName();
+const char* localIP();  // PPP-assigned local IPv4 as a string ("" if link down)
 
 } // namespace cellular

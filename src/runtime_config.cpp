@@ -24,6 +24,9 @@ static void persist() {
   for (size_t i = 0; i < SENSOR_COUNT && i < 16; i++)
     if (s.sensor_enabled[i]) mask |= (1u << i);
   prefs.putUShort("enmask", mask);
+  // Remember how many sensors the mask covers, so a mask saved before a new
+  // sensor was added doesn't silently disable that (higher-index) sensor.
+  prefs.putUShort("encnt", (uint16_t)(SENSOR_COUNT < 16 ? SENSOR_COUNT : 16));
   prefs.end();
 }
 
@@ -34,7 +37,11 @@ void begin() {
   if (prefs.isKey("report")) s.report_interval_s = prefs.getUInt("report", s.report_interval_s);
   if (prefs.isKey("enmask")) {
     uint16_t mask = prefs.getUShort("enmask", 0xFFFF);
-    for (size_t i = 0; i < SENSOR_COUNT && i < 16; i++)
+    // Only honour the mask for sensors that existed when it was saved; any sensor
+    // added since (higher index, and pre-"encnt" masks -> saved=0) keeps its
+    // compiled SENSORS[].enabled default rather than being forced off.
+    size_t saved = prefs.isKey("encnt") ? prefs.getUShort("encnt", 0) : 0;
+    for (size_t i = 0; i < SENSOR_COUNT && i < 16 && i < saved; i++)
       s.sensor_enabled[i] = mask & (1u << i);
   }
   prefs.end();

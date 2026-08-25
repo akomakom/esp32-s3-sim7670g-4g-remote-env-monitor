@@ -33,6 +33,7 @@ static esp_modem_dce_t* s_dce        = nullptr;
 static esp_netif_t*     s_ppp_netif  = nullptr;
 static volatile bool    g_up         = false;   // set from the IP event task
 static volatile bool    g_usb_gone   = false;   // set from the CDC-ACM error cb
+static volatile uint32_t g_ip        = 0;       // PPP local IPv4 (net order), 0 = down
 static int              g_rsrp       = 0;
 static char             g_oper[32]   = {0};
 
@@ -41,10 +42,12 @@ static void onIpEvent(void*, esp_event_base_t, int32_t id, void* data) {
   if (id == IP_EVENT_PPP_GOT_IP) {
     ip_event_got_ip_t* e = (ip_event_got_ip_t*)data;
     esp_netif_set_default_netif(e->esp_netif);   // route lwip sockets via cellular
+    g_ip = e->ip_info.ip.addr;                   // 32-bit write is atomic on the S3
     g_up = true;
     LOGI("PPP up: " IPSTR, IP2STR(&e->ip_info.ip));
   } else if (id == IP_EVENT_PPP_LOST_IP) {
     g_up = false;
+    g_ip = 0;
     LOGW("PPP down (lost IP)");
   }
 }
@@ -203,6 +206,15 @@ void loop() {
 int         signalRSRP()   { return g_rsrp; }
 const char* operatorName() { return g_oper; }
 
+const char* localIP() {
+  static char buf[16];
+  uint32_t ip = g_ip;                            // atomic 32-bit snapshot
+  if (!ip) { buf[0] = '\0'; return buf; }
+  esp_ip4_addr_t a; a.addr = ip;
+  snprintf(buf, sizeof(buf), IPSTR, IP2STR(&a));
+  return buf;
+}
+
 } // namespace cellular
 
 #else  // !CELLULAR_ENABLED — bench mode: modem code compiled out entirely
@@ -214,6 +226,7 @@ bool        ensureConnected(){ return false; }
 void        loop()           {}
 int         signalRSRP()     { return 0; }
 const char* operatorName()   { return ""; }
+const char* localIP()        { return ""; }
 } // namespace cellular
 
 #endif // CELLULAR_ENABLED

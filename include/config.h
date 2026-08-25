@@ -130,6 +130,11 @@
 // side N-MOSFET / HIGH-active driver module); false = active-low.
 #define RS485_POWER_ACTIVE_HIGH  true
 
+// 1-Wire bus for DS18B20 temperature probes (e.g. the water pipe). Needs a 4.7k
+// pull-up from the data line to 3V3. -1 disables. (See the BUS_DS18B20 row in
+// SENSORS[].)
+#define PIN_DS18B20           16
+
 // Onboard status RGB LED (WS2812). -1 disables LED status. (The esp32s3 Arduino
 // variant defaults PIN_RGB_LED to 48; this board's addressable LED is on 38, so
 // override the variant's value. config.h is always included after Arduino.h.)
@@ -262,24 +267,26 @@ enum SensorBus {
   BUS_I2C,     // local I2C SHT40 (temp + humidity)
   BUS_RS485,   // RS485 Modbus SHT40-class transmitter (temp + humidity)
   BUS_ESPNOW,  // hot tub controller over ESP-NOW (temp only, water temperature)
+  BUS_DS18B20, // 1-Wire DS18B20 on PIN_DS18B20 (temp only)
 };
 
 struct SensorDef {
   const char* key;      // short id used in the compact payload (keep it short!)
   const char* location; // human-readable, for docs/HA only
   SensorBus   bus;      // which bus/transport this sensor lives on
-  uint8_t     addr;     // Modbus slave address (1..247); 0 for I2C / ESP-NOW
+  uint8_t     addr;     // Modbus slave address (1..247); 0 for I2C / ESP-NOW / DS18B20
   bool        enabled;
 };
 
 static const SensorDef SENSORS[] = {
-  //  key       location                         bus         addr  enabled
-  {  "crawl",  "Crawlspace (local I2C)",         BUS_I2C,    0,    true  },
-  {  "return", "Return / indoor air",            BUS_RS485,  0x01, true  },
-  {  "supply", "Supply duct",                    BUS_RS485,  0x02, true  },
-  {  "outdoor","Outdoor reference",              BUS_RS485,  0x03, true  },
-  {  "garage", "Attached garage (dehumidified)", BUS_RS485,  0x04, true  },
-  {  "tub",    "Hot tub water (ESP-NOW)",        BUS_ESPNOW, 0,    HOTTUB_ESPNOW_ENABLED },
+  //  key       location                         bus          addr  enabled
+  {  "crawl",  "Crawlspace (local I2C)",         BUS_I2C,     0,    true  },
+  {  "return", "Return / indoor air",            BUS_RS485,   0x01, true  },
+  {  "supply", "Supply duct",                    BUS_RS485,   0x02, true  },
+  {  "outdoor","Outdoor reference",              BUS_RS485,   0x03, true  },
+  {  "garage", "Attached garage (dehumidified)", BUS_RS485,   0x04, true  },
+  {  "tub",    "Hot tub water (ESP-NOW)",        BUS_ESPNOW,  0,    HOTTUB_ESPNOW_ENABLED },
+  {  "pipe",   "Water pipe (DS18B20)",           BUS_DS18B20, 0,    true  },
 };
 static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 

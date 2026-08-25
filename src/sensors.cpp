@@ -6,6 +6,10 @@
 #include <Wire.h>
 #include <Adafruit_SHT4x.h>
 #include <ModbusMaster.h>
+#if PIN_DS18B20 >= 0
+  #include <OneWire.h>
+  #include <DallasTemperature.h>
+#endif
 
 namespace sensors {
 
@@ -14,6 +18,11 @@ static bool           sht4_ok = false;
 
 static HardwareSerial rs485(RS485_UART_NUM);
 static ModbusMaster   modbus;
+
+#if PIN_DS18B20 >= 0
+static OneWire          oneWire(PIN_DS18B20);
+static DallasTemperature ds18(&oneWire);   // 1-Wire DS18B20 probe(s)
+#endif
 
 // ---- RS485 direction control (only if the module isn't auto-direction) ----
 static void rs485PreTx()  { if (PIN_RS485_DE_RE >= 0) digitalWrite(PIN_RS485_DE_RE, HIGH); }
@@ -54,6 +63,14 @@ void begin() {
          RS485_POWER_ACTIVE_HIGH ? "high" : "low");
   }
   LOGI("RS485 bus @%d baud ready", RS485_BAUD);
+
+#if PIN_DS18B20 >= 0
+  // --- 1-Wire DS18B20 ---
+  ds18.begin();
+  ds18.setResolution(11);            // ~0.125 C, ~375 ms conversion (vs 750 ms @12-bit)
+  ds18.setWaitForConversion(true);
+  LOGI("DS18B20: %d device(s) on GPIO%d", ds18.getDeviceCount(), PIN_DS18B20);
+#endif
 }
 
 // Fill derived metrics + validity onto a partially-populated Reading.
@@ -126,14 +143,30 @@ static Reading readEspNow(uint8_t idx) {
   return r;
 }
 
+// DS18B20 1-Wire probe (temp only; humidity-derived metrics stay NaN and are
+// omitted from the payload). Blocks for the conversion (~375 ms @ 11-bit).
+static Reading readDS18B20(uint8_t idx) {
+  Reading r{}; r.sensor_idx = idx;
+  r.rh = r.dew_c = r.abs_hum = NAN;
+#if PIN_DS18B20 >= 0
+  ds18.requestTemperatures();
+  float t = ds18.getTempCByIndex(0);   // the single probe on the bus
+  if (t != DEVICE_DISCONNECTED_C && !isnan(t)) { r.temp_c = t; r.valid = true; return r; }
+  LOGW("DS18B20: no reading on GPIO%d", PIN_DS18B20);
+#endif
+  r.valid = false;
+  return r;
+}
+
 Reading read(uint8_t idx) {
   const SensorDef& s = SENSORS[idx];
   Reading r;
   switch (s.bus) {
-    case BUS_I2C:    r = readI2C(idx);            break;
-    case BUS_ESPNOW: r = readEspNow(idx);         break;
+    case BUS_I2C:     r = readI2C(idx);            break;
+    case BUS_ESPNOW:  r = readEspNow(idx);         break;
+    case BUS_DS18B20: r = readDS18B20(idx);        break;
     case BUS_RS485:
-    default:         r = readModbus(idx, s.addr); break;
+    default:          r = readModbus(idx, s.addr); break;
   }
   if (r.valid)
     LOGD("%s: T=%.2f RH=%.2f dew=%.2f AH=%.2f", s.key, r.temp_c, r.rh, r.dew_c, r.abs_hum);
