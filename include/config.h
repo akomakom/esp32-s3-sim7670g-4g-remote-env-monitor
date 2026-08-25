@@ -135,6 +135,16 @@
 // SENSORS[].)
 #define PIN_DS18B20           16
 
+// GL5528 photoresistor as an occupancy/light sensor. Wire the LDR from 3V3 to
+// PIN_LDR and a fixed ~10k pull-down from PIN_LDR to GND (divider: bright light =
+// low LDR resistance = HIGH ADC). MUST be an ADC1 pin (GPIO1..10) because WiFi/
+// ESP-NOW monopolises ADC2. -1 disables. Sampled by a dedicated task (see
+// light.cpp); the light/dark threshold + change delta are MQTT-tunable (rconfig).
+#define PIN_LDR               1     // ADC1_CH0
+#define LIGHT_POLL_MS         200   // occupancy sampling cadence (task)
+#define DEFAULT_LIGHT_THRESHOLD 1800 // ADC counts (0..4095); above = light/occupied
+#define DEFAULT_LIGHT_DELTA     600  // event when the level jumps at least this much
+
 // Onboard status RGB LED (WS2812). -1 disables LED status. (The esp32s3 Arduino
 // variant defaults PIN_RGB_LED to 48; this board's addressable LED is on 38, so
 // override the variant's value. config.h is always included after Arduino.h.)
@@ -349,11 +359,13 @@ static const size_t SENSOR_COUNT = sizeof(SENSORS) / sizeof(SENSORS[0]);
 #define TOPIC_CMD             TOPIC_BASE "/cmd"       // device subs
 #define TOPIC_CMD_NOW         TOPIC_BASE "/cmd/report_now" // device subs (HA button)
 #define TOPIC_ACK             TOPIC_BASE "/ack"       // device publishes
+#define TOPIC_OCCUPANCY       TOPIC_BASE "/occupancy" // device publishes (retained ON/OFF)
 // Per-key retained config topics for simple HA `number` controls. Separate
 // topics so two settings never overwrite each other's retained value (matters
 // when the device is offline and a change is applied on reconnect).
 #define TOPIC_CFG_SAMPLE      TOPIC_BASE "/config/sample_s"  // retained, device subs
 #define TOPIC_CFG_REPORT      TOPIC_BASE "/config/report_s"  // retained, device subs
+#define TOPIC_CFG_LIGHT_THR   TOPIC_BASE "/config/light_threshold" // retained, device subs
 
 // TLS: paste the broker's CA chain (PEM) into secrets/ca_cert.h as
 // `MQTT_CA_CERT`. If you skip it and set MQTT_TLS_INSECURE the device will NOT

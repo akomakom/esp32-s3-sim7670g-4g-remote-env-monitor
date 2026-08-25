@@ -12,6 +12,8 @@ static Preferences prefs;
 static void loadDefaults() {
   s.sample_interval_s = DEFAULT_SAMPLE_INTERVAL_S;
   s.report_interval_s = DEFAULT_REPORT_INTERVAL_S;
+  s.light_threshold   = DEFAULT_LIGHT_THRESHOLD;
+  s.light_delta       = DEFAULT_LIGHT_DELTA;
   for (size_t i = 0; i < SENSOR_COUNT && i < 16; i++)
     s.sensor_enabled[i] = SENSORS[i].enabled;
 }
@@ -27,6 +29,8 @@ static void persist() {
   // Remember how many sensors the mask covers, so a mask saved before a new
   // sensor was added doesn't silently disable that (higher-index) sensor.
   prefs.putUShort("encnt", (uint16_t)(SENSOR_COUNT < 16 ? SENSOR_COUNT : 16));
+  prefs.putUShort("lthr", s.light_threshold);
+  prefs.putUShort("ldelta", s.light_delta);
   prefs.end();
 }
 
@@ -44,6 +48,8 @@ void begin() {
     for (size_t i = 0; i < SENSOR_COUNT && i < 16 && i < saved; i++)
       s.sensor_enabled[i] = mask & (1u << i);
   }
+  if (prefs.isKey("lthr"))   s.light_threshold = prefs.getUShort("lthr", s.light_threshold);
+  if (prefs.isKey("ldelta")) s.light_delta     = prefs.getUShort("ldelta", s.light_delta);
   prefs.end();
   LOGI("config: sample=%us report=%us", s.sample_interval_s, s.report_interval_s);
 }
@@ -74,6 +80,15 @@ bool setReportIntervalS(uint32_t v) {
   return true;
 }
 
+bool setLightThreshold(uint16_t v) {
+  if (v > 4095) v = 4095;
+  if (v == s.light_threshold) return false;
+  s.light_threshold = v;
+  persist();
+  LOGI("config: light_threshold=%u (set)", v);
+  return true;
+}
+
 bool applyJson(const char* json, size_t len) {
   JsonDocument doc;
   if (deserializeJson(doc, json, len)) { LOGW("config: bad JSON ignored"); return false; }
@@ -87,6 +102,16 @@ bool applyJson(const char* json, size_t len) {
     uint32_t v = clampInterval(doc["report_s"]);
     if (v != s.report_interval_s) { s.report_interval_s = v; changed = true; }
   }
+  // Occupancy thresholds: {"light_threshold":1800,"light_delta":600} (ADC counts).
+  if (doc["light_threshold"].is<uint16_t>()) {
+    uint16_t v = doc["light_threshold"];
+    if (v != s.light_threshold) { s.light_threshold = v; changed = true; }
+  }
+  if (doc["light_delta"].is<uint16_t>()) {
+    uint16_t v = doc["light_delta"];
+    if (v != s.light_delta) { s.light_delta = v; changed = true; }
+  }
+
   // Per-sensor enable by key: {"en":{"garage":false,"supply":true}}
   JsonObject en = doc["en"].as<JsonObject>();
   if (!en.isNull()) {

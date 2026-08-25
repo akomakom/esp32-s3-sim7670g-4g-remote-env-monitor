@@ -11,6 +11,8 @@ struct Settings {
   uint32_t sample_interval_s;
   uint32_t report_interval_s;
   bool     sensor_enabled[16];   // per-sensor override, indexed like SENSORS[]
+  uint16_t light_threshold;      // occupancy: ADC counts above = "light/occupied"
+  uint16_t light_delta;          // occupancy: report an event on a level jump this big
 };
 
 void            begin();                 // load persisted overrides from NVS
@@ -25,5 +27,6 @@ bool applyJson(const char* json, size_t len);
 // Used by the per-key MQTT config topics (HA number controls).
 bool setSampleIntervalS(uint32_t s);
 bool setReportIntervalS(uint32_t s);
+bool setLightThreshold(uint16_t counts);   // occupancy light/dark threshold (0..4095)
 
 } // namespace rconfig

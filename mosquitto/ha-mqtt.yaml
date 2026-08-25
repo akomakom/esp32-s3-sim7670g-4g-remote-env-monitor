@@ -458,6 +458,23 @@ sensor:
         payload_available: "online"
         payload_not_available: "offline"
 
+  - name: "Rental Ambient Light"
+    unique_id: rentalmon_light
+    state_topic: "rental/rental-mon-01/health"
+    # Raw GL5528 ADC counts (0..4095); higher = brighter. -1 means disabled.
+    value_template: "{{ value_json.light if value_json.light >= 0 else none }}"
+    state_class: measurement
+    entity_category: diagnostic
+    device:
+      suggested_area: "Rental"
+      name: "Rental Monitor"
+      identifiers: "rental_mon_01"
+    availability:
+      - topic: "rental/rental-mon-01/health"
+        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+        payload_available: "online"
+        payload_not_available: "offline"
+
   - name: "Rental Monitor Free Heap"
     unique_id: rentalmon_heap
     state_topic: "rental/rental-mon-01/health"
@@ -627,6 +644,22 @@ sensor:
         payload_not_available: "offline"
 
 binary_sensor:
+  - name: "Rental Occupancy"
+    unique_id: rentalmon_occupancy
+    state_topic: "rental/rental-mon-01/occupancy"
+    payload_on: "ON"
+    payload_off: "OFF"
+    device_class: occupancy
+    device:
+      suggested_area: "Rental"
+      name: "Rental Monitor"
+      identifiers: "rental_mon_01"
+    availability:
+      - topic: "rental/rental-mon-01/health"
+        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+        payload_available: "online"
+        payload_not_available: "offline"
+
   - name: "Rental Monitor Online"
     unique_id: rentalmon_online
     state_topic: "rental/rental-mon-01/health"
@@ -701,6 +734,29 @@ number:
     unit_of_measurement: "s"
     mode: box
     icon: mdi:timer-upload-outline
+    entity_category: config
+    device:
+      suggested_area: "Rental"
+      name: "Rental Monitor"
+      identifiers: "rental_mon_01"
+    availability:
+      - topic: "rental/rental-mon-01/health"
+        value_template: "{{ 'online' if value_json.online else 'offline' }}"
+        payload_available: "online"
+        payload_not_available: "offline"
+
+  - name: "Rental Occupancy Light Threshold"
+    unique_id: rentalmon_light_threshold
+    command_topic: "rental/rental-mon-01/config/light_threshold"
+    state_topic: "rental/rental-mon-01/health"
+    value_template: "{{ value_json.light_threshold }}"
+    retain: true
+    optimistic: true
+    min: 0
+    max: 4095
+    step: 25
+    mode: slider
+    icon: mdi:brightness-6
     entity_category: config
     device:
       suggested_area: "Rental"

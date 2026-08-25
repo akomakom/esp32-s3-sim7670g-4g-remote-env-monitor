@@ -41,6 +41,10 @@ static void onMessage(char* topic, uint8_t* payload, unsigned int len) {
     rconfig::setReportIntervalS(strtoul(String((char*)payload, len).c_str(), nullptr, 10));
     return;
   }
+  if (strcmp(topic, TOPIC_CFG_LIGHT_THR) == 0) {
+    rconfig::setLightThreshold((uint16_t)strtoul(String((char*)payload, len).c_str(), nullptr, 10));
+    return;
+  }
   if (strcmp(topic, TOPIC_CMD_NOW) == 0) {   // HA "Report Now" button
     if (g_now_cb) g_now_cb();
     return;
@@ -99,9 +103,10 @@ bool ensureConnected() {
 
   client.subscribe(TOPIC_CONFIG,     MQTT_QOS);  // retained -> we get current config
   client.subscribe(TOPIC_CMD,        MQTT_QOS);
-  client.subscribe(TOPIC_CFG_SAMPLE, MQTT_QOS);  // retained per-key config (HA numbers)
-  client.subscribe(TOPIC_CFG_REPORT, MQTT_QOS);
-  client.subscribe(TOPIC_CMD_NOW,    MQTT_QOS);  // HA "Report Now" button
+  client.subscribe(TOPIC_CFG_SAMPLE,   MQTT_QOS);  // retained per-key config (HA numbers)
+  client.subscribe(TOPIC_CFG_REPORT,   MQTT_QOS);
+  client.subscribe(TOPIC_CFG_LIGHT_THR, MQTT_QOS); // occupancy light/dark threshold
+  client.subscribe(TOPIC_CMD_NOW,      MQTT_QOS);  // HA "Report Now" button
   LOGI("mqtt: connected, subscribed to config+cmd");
   return true;
 }

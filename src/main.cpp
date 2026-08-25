@@ -29,6 +29,7 @@
 #include "ota.h"
 #include "espnow_tub.h"
 #include "led.h"
+#include "light.h"
 
 // ---- scheduling state ----
 static uint32_t g_next_sample_ms = 0;
@@ -103,6 +104,7 @@ void setup() {
   // Hot tub water temp over ESP-NOW (uses the WiFi radio only; independent of the
   // cellular PPP uplink). Non-blocking; safe/no-op if the feature is disabled.
   espnow_tub::begin();
+  light::begin();               // occupancy sampler task (GL5528)
 
 #if CELLULAR_ENABLED
   cellular::begin();
@@ -201,7 +203,7 @@ static void doReport() {
 
 static void doHealth() {
   if (!mqtt::isConnected()) return;
-  char js[384];
+  char js[448];
   size_t n = health::buildJson(js, sizeof(js));
   mqtt::publish(TOPIC_HEALTH, (const uint8_t*)js, n, /*retained*/false);
 }
@@ -281,6 +283,15 @@ void loop() {
 #endif
 
   ota::markHealthyIfDue();           // confirm a trial image once stable
+
+  // Publish occupancy state changes as they happen (retained ON/OFF). The light
+  // task already logged the event; only consume it once we can actually send, so
+  // an event that fires while offline still publishes on reconnect.
+  {
+    bool occ; int lvl;
+    if (linkUp && mqtt::isConnected() && light::takeEvent(occ, lvl))
+      mqtt::publishString(TOPIC_OCCUPANCY, occ ? "ON" : "OFF", /*retained*/true);
+  }
 
   uint32_t now = millis();
   const auto& cfg = rconfig::get();

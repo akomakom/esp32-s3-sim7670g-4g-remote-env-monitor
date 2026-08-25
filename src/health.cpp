@@ -6,6 +6,7 @@
 #include "ring_buffer.h"
 #include "runtime_config.h"
 #include "espnow_tub.h"
+#include "light.h"
 #include <esp_system.h>
 
 namespace health {
@@ -46,7 +47,8 @@ size_t buildJson(char* out, size_t cap) {
     "{\"online\":true,\"fw\":\"%s\",\"ts\":%u,\"up\":%u,"
     "\"heap\":%u,\"rssi\":%d,\"op\":\"%s\",\"vbat\":%.2f,"
     "\"mains\":%s,\"rst\":\"%s\",\"buf\":%u,\"tx\":%u,\"rx\":%u,"
-    "\"sample_s\":%u,\"report_s\":%u,\"tub_rssi\":%d,\"ip\":\"%s\"}",
+    "\"sample_s\":%u,\"report_s\":%u,\"tub_rssi\":%d,\"ip\":\"%s\","
+    "\"light\":%d,\"occ\":%d,\"light_threshold\":%u}",
     FW_VERSION_FULL,
     timesync::nowUtc(),
     (uint32_t)(millis() / 1000),
@@ -62,7 +64,10 @@ size_t buildJson(char* out, size_t cap) {
     rconfig::get().sample_interval_s,
     rconfig::get().report_interval_s,
     espnow_tub::rssi(300000),    // dBm of last tub packet within 5 min (0 = not heard)
-    cellular::localIP());        // PPP-assigned IP ("" when the link is down)
+    cellular::localIP(),         // PPP-assigned IP ("" when the link is down)
+    light::level(),              // ambient light (ADC counts, -1 if disabled)
+    light::occupied() ? 1 : 0,   // occupancy (light above threshold)
+    rconfig::get().light_threshold);
 }
 
 } // namespace health
